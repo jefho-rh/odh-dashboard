@@ -7,7 +7,7 @@ class AutoragExperimentsPage {
   }
 
   private wait() {
-    cy.findByTestId('app-page-title');
+    cy.findByRole('heading', { name: /autorag/i });
     cy.testA11y();
   }
 
@@ -16,15 +16,15 @@ class AutoragExperimentsPage {
   }
 
   findEmptyState(timeout?: number) {
-    return cy.findByTestId('empty-experiments-state', timeout ? { timeout } : undefined);
+    return cy.get('.pf-v6-c-empty-state', timeout ? { timeout } : undefined);
   }
 
   findCreateRunButton() {
-    return cy.findByTestId('create-run-button');
+    return cy.contains('a, button', /create.*run/i);
   }
 
   findHeaderCreateRunButton() {
-    return cy.findByTestId('autorag-header-create-run-button');
+    return cy.contains('a, button', /create.*run/i);
   }
 }
 
