@@ -11,7 +11,7 @@ class AutoragConfigurePage {
   }
 
   private wait() {
-    cy.findByRole('heading', { name: /autorag/i });
+    cy.findByRole('heading', { name: /autorag/i, level: 1 });
     cy.testA11y();
   }
 
@@ -177,7 +177,7 @@ class AutoragConfigurePage {
     autoragExperimentsPage.visit(projectName);
 
     cy.step('Wait for pipeline server to be fully ready and click Create run');
-    cy.findByRole('heading', { name: /autorag/i, timeout: 120000 }).should('be.visible');
+    cy.findByRole('heading', { name: /autorag/i, level: 1, timeout: 120000 }).should('be.visible');
     autoragExperimentsPage.findCreateRunButton().click();
 
     cy.step('Step 1 - Fill name and description');

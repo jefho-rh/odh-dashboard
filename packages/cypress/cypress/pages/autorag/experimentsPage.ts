@@ -7,7 +7,7 @@ class AutoragExperimentsPage {
   }
 
   private wait() {
-    cy.findByRole('heading', { name: /autorag/i });
+    cy.findByRole('heading', { name: /autorag/i, level: 1 });
     cy.testA11y();
   }
 
