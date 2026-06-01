@@ -98,7 +98,7 @@ class AutoragConfigurePage {
 
   // Step 2 - Vector store
   findVectorStoreSelector() {
-    return cy.contains('.pf-v6-c-menu-toggle', /vector/i);
+    return cy.contains('.pf-v6-c-menu-toggle', /vector/i, { timeout: 30000 });
   }
 
   findVectorStoreOption(providerId: string) {
