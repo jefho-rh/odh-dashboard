@@ -2,7 +2,10 @@ import { appChrome } from '../appChrome';
 
 class AutoragExperimentsPage {
   visit(namespace: string) {
-    cy.visitWithLogin(`/gen-ai-studio/autorag/experiments/${namespace}`);
+    cy.visitWithLogin('/');
+    cy.reload();
+    this.findNavItem().should('exist');
+    cy.visit(`/gen-ai-studio/autorag/experiments/${namespace}`);
     this.wait();
   }
 
