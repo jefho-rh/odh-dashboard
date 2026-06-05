@@ -103,7 +103,8 @@ describe('AutoRAG Experiments List and Run Management E2E', { testIsolation: fal
     },
   );
 
-  it(
+  // Stop/retry actions not available on 3.4.1
+  it.skip(
     'Can stop a running experiment from the results page',
     { tags: ['@AutoRAG', '@AutoRAGRegression'] },
     () => {
