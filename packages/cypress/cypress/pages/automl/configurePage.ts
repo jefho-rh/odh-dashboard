@@ -46,7 +46,7 @@ class AutomlConfigurePage {
   }
 
   findUploadFileInput() {
-    return cy.get('input[type="file"]').first();
+    return cy.get('.pf-v6-c-file-upload input[type="file"]');
   }
 
   findUploadSpinner() {
