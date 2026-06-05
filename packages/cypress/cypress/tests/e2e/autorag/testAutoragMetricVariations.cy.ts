@@ -116,6 +116,8 @@ describe('AutoRAG Metric Variations E2E', { testIsolation: false }, () => {
         .findFileExplorerTable()
         .contains('td', uploadFileName)
         .should('be.visible')
+        .closest('tr')
+        .find('input[type="radio"]')
         .click();
       autoragConfigurePage.findFileExplorerSelectBtn().click();
 

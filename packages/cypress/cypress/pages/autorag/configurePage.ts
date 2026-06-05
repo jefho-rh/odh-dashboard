@@ -217,7 +217,12 @@ class AutoragConfigurePage {
     this.findBrowseBucketButton().click();
     this.findFileExplorerTable().should('be.visible');
     this.findFileExplorerSearch().type(uploadFileName);
-    this.findFileExplorerTable().contains('td', uploadFileName).should('be.visible').click();
+    this.findFileExplorerTable()
+      .contains('td', uploadFileName)
+      .should('be.visible')
+      .closest('tr')
+      .find('input[type="radio"]')
+      .click();
     this.findFileExplorerSelectBtn().click();
 
     cy.step('Upload evaluation dataset JSON');
