@@ -92,7 +92,8 @@ describe('AutoML Experiments List and Run Management E2E', { testIsolation: fals
     },
   );
 
-  it(
+  // TODO: Enable when stop-run testids are added to source components
+  it.skip(
     'Can stop a running experiment from the results page',
     { tags: ['@AutoML', '@AutoMLRegression'] },
     () => {

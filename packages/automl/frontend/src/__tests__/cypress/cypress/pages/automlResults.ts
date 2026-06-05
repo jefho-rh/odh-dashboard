@@ -78,7 +78,7 @@ class AutomlResultsPage {
   }
 
   findFeatureSearchInput() {
-    return cy.findByTestId('feature-search-input');
+    return cy.findByTestId('feature-search');
   }
 
   // Confusion Matrix
