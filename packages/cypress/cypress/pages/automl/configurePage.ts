@@ -47,7 +47,7 @@ class AutomlConfigurePage {
   }
 
   findUploadFileInput() {
-    return cy.get('input[type="file"]');
+    return cy.get('input[type="file"]').first();
   }
 
   findUploadSpinner() {
