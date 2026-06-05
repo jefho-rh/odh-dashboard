@@ -2,8 +2,12 @@
 import * as yaml from 'js-yaml';
 
 import { pollUntilSuccess } from './baseCommands';
-import { allowOgxAccess } from './ogxNetworkPolicy';
-import { createOgxSecret } from './ogxSecret';
+import { allowLlamaStackAccess } from './llamaStackNetworkPolicy';
+import {
+  waitForLlamaStackOperatorReady,
+  waitForLlamaStackDistributionReady,
+} from './llamaStackDistribution';
+import { createLlamaStackSecret } from './llamaStackSecret';
 import { checkInferenceServiceState } from './modelServing';
 import type { CommandLineResult } from '../../types';
 
@@ -15,17 +19,18 @@ const LLM_SERVING_RUNTIME = 'autorag-vllm-cpu-runtime';
 const LLM_INFERENCE_SERVICE = 'autorag-llm';
 const MILVUS_DEPLOYMENT = 'milvus';
 const MILVUS_PORT = 19530;
-const OGX_SERVER_NAME = 'autorag-ogx';
-const OGX_CONFIG_MAP = 'ogx-config';
-const OGX_PORT = 8321;
+const LSD_NAME = 'autorag-lsd';
+const LSD_CONFIG_MAP = 'llama-stack-config';
+const LSD_PORT = 8321;
 
-// Embedding is handled by OGX's built-in inline::sentence-transformers provider.
-// No external InferenceService needed — it runs inside the OGX pod on CPU.
+// Embedding is handled by LlamaStack's built-in inline::sentence-transformers provider.
+// No external InferenceService needed — it runs inside the LlamaStack pod on CPU.
 // Uses all-MiniLM-L6-v2: public (no HuggingFace auth), small (22M params), 384-dim.
 const INLINE_EMBEDDING_MODEL_ID = 'sentence-transformers/all-MiniLM-L6-v2';
 const INLINE_EMBEDDING_DIMENSION = 384;
 
 // Default images — overridable via CYPRESS_ env vars for disconnected clusters
+// LLM runtime: used by gen-ai tests (vllm_cpu_amd64_runtime.yaml)
 const DEFAULT_VLLM_CPU_IMAGE = 'quay.io/rh-aiservices-bu/vllm-cpu-openai-ubi9:0.3';
 const DEFAULT_LLM_MODEL_URI =
   'oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-1b-instruct';
@@ -53,260 +58,57 @@ const getLlmModelUri = (): string => getImage('AUTORAG_LLM_MODEL_URI', DEFAULT_L
 const getMilvusImage = (): string => getImage('AUTORAG_MILVUS_IMAGE', DEFAULT_MILVUS_IMAGE);
 
 // ---------------------------------------------------------------------------
-// Self-contained OGX/LlamaStack compatibility helpers
-//
-// The upstream CRD is being renamed from LlamaStack → OGX. Different clusters
-// may have either (or both) CRDs active. These helpers detect which one to use
-// at runtime: try OGX first, fall back to LlamaStack.
-// ---------------------------------------------------------------------------
-
-/**
- * Detect which DSC component name is active: 'ogx' (new) or 'llamastackoperator' (old).
- */
-const detectDscComponentName = (): Cypress.Chainable<string> =>
-  cy
-    .exec(`oc get datasciencecluster default-dsc -o jsonpath='{.spec.components.ogx}'`, {
-      failOnNonZeroExit: false,
-    })
-    .then((result) => {
-      const raw = result.stdout.trim().replace(/'/g, '');
-      return cy.wrap(raw && raw !== '{}' ? 'ogx' : 'llamastackoperator');
-    });
-
-/**
- * Detect which DSC condition name indicates operator readiness:
- * 'OGXReady' (new) or 'LlamaStackOperatorReady' (old).
- */
-const detectDscConditionName = (): Cypress.Chainable<string> =>
-  cy
-    .exec(
-      `oc get datasciencecluster default-dsc -o jsonpath='{.status.conditions[?(@.type=="OGXReady")].type}'`,
-      { failOnNonZeroExit: false },
-    )
-    .then((result) => {
-      const raw = result.stdout.trim().replace(/'/g, '');
-      return cy.wrap(raw.includes('OGXReady') ? 'OGXReady' : 'LlamaStackOperatorReady');
-    });
-
-/**
- * Detect which distribution CRD to use based on the active DSC component.
- * OGXServer and LlamaStackDistribution have different spec schemas, so CRD
- * existence alone is not enough — we must match the operator that is managing them.
- */
-const detectDistributionCrd = (): Cypress.Chainable<{
-  kind: string;
-  apiVersion: string;
-  plural: string;
-}> =>
-  detectDscComponentName().then((componentName) => {
-    if (componentName === 'ogx') {
-      return cy.wrap({
-        kind: 'OGXServer',
-        apiVersion: 'ogx.io/v1beta1',
-        plural: 'ogxservers',
-      });
-    }
-    return cy.wrap({
-      kind: 'LlamaStackDistribution',
-      apiVersion: 'llamastack.io/v1alpha1',
-      plural: 'llamastackdistributions',
-    });
-  });
-
-/**
- * Self-contained wait for the OGX operator readiness condition on the DSC.
- * Detects the correct condition name automatically.
- */
-const waitForOperatorReady = (maxAttempts = 60, pollIntervalMs = 5000): void => {
-  detectDscConditionName().then((conditionName) => {
-    const startTime = Date.now();
-
-    const check = (attemptNumber = 1): void => {
-      cy.exec(
-        `oc get datasciencecluster default-dsc -o jsonpath='{.status.conditions[?(@.type=="${conditionName}")].status}'`,
-        { failOnNonZeroExit: false },
-      ).then((result) => {
-        const raw = result.stdout.trim().replace(/'/g, '');
-        const isReady = raw.split(/\s+/).includes('True');
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-        if (isReady) {
-          cy.log(`${conditionName} condition is True (after ${elapsed}s)`);
-          return;
-        }
-
-        if (attemptNumber >= maxAttempts) {
-          throw new Error(
-            `${conditionName} not True after ${maxAttempts} attempts (${elapsed}s). Status: ${
-              raw || 'not found'
-            }`,
-          );
-        }
-
-        cy.log(
-          `Waiting for ${conditionName} (attempt ${attemptNumber}/${maxAttempts}, status: ${
-            raw || 'not found'
-          })`,
-        );
-        cy.wait(pollIntervalMs).then(() => check(attemptNumber + 1));
-      });
-    };
-
-    cy.step(`Polling for ${conditionName} condition`);
-    check();
-  });
-};
-
-/**
- * Self-contained wait for an OGX distribution server to be Ready.
- * Detects the correct CRD type (ogxservers or llamastackdistributions) automatically.
- */
-const waitForDistributionReady = (
-  namespace: string,
-  maxAttempts = 60,
-  pollIntervalMs = 5000,
-): void => {
-  detectDistributionCrd().then((crd) => {
-    const startTime = Date.now();
-
-    const check = (attemptNumber = 1): void => {
-      cy.exec(`oc get ${crd.plural} -n ${namespace} -o json`, {
-        failOnNonZeroExit: false,
-      }).then((result) => {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-        if (result.exitCode !== 0 || !result.stdout.trim()) {
-          if (attemptNumber >= maxAttempts) {
-            throw new Error(
-              `No ${crd.kind} found in namespace ${namespace} after ${attemptNumber} attempts`,
-            );
-          }
-          cy.log(`No ${crd.kind} found yet (attempt ${attemptNumber}/${maxAttempts})`);
-          cy.wait(pollIntervalMs).then(() => check(attemptNumber + 1));
-          return;
-        }
-
-        let items: Array<{
-          status?: {
-            phase?: string;
-            conditions?: Array<{ type: string; status: string; message?: string; reason?: string }>;
-          };
-          metadata?: { name?: string };
-        }>;
-        try {
-          items = (JSON.parse(result.stdout) as { items: typeof items }).items;
-        } catch {
-          throw new Error(`Failed to parse ${crd.kind} JSON`);
-        }
-
-        if (items.length === 0) {
-          if (attemptNumber >= maxAttempts) {
-            throw new Error(
-              `No ${crd.kind} found in namespace ${namespace} after ${attemptNumber} attempts`,
-            );
-          }
-          cy.log(`No ${crd.kind} found yet (attempt ${attemptNumber}/${maxAttempts})`);
-          cy.wait(pollIntervalMs).then(() => check(attemptNumber + 1));
-          return;
-        }
-
-        const server = items[0];
-        const phase = server.status?.phase ?? 'Unknown';
-        const name = server.metadata?.name ?? 'unknown';
-
-        if (phase === 'Ready') {
-          cy.log(`${crd.kind} ${name} is Ready in ${namespace} (after ${elapsed}s)`);
-          return;
-        }
-
-        if (phase === 'Failed') {
-          const details = (server.status?.conditions ?? [])
-            .map((c) => `${c.type}: ${c.status}${c.message ? ` - ${c.message}` : ''}`)
-            .join('\n');
-          throw new Error(
-            `${crd.kind} ${name} failed in ${namespace}\nPhase: Failed\n${details || 'No details'}`,
-          );
-        }
-
-        if (attemptNumber >= maxAttempts) {
-          throw new Error(
-            `${crd.kind} ${name} not Ready within ${
-              (maxAttempts * pollIntervalMs) / 1000
-            }s. Phase: ${phase}`,
-          );
-        }
-
-        cy.log(
-          `${crd.kind} ${name} phase: "${phase}" (attempt ${attemptNumber}/${maxAttempts}, elapsed: ${elapsed}s)`,
-        );
-        cy.wait(pollIntervalMs).then(() => check(attemptNumber + 1));
-      });
-    };
-
-    cy.step(`Polling for ${crd.kind} Ready in ${namespace}`);
-    check();
-  });
-};
-
-// ---------------------------------------------------------------------------
-// OGX operator management (AutoRAG-owned, independent of gen-ai)
+// LlamaStack operator management (AutoRAG-owned, independent of gen-ai)
 // ---------------------------------------------------------------------------
 
 const DSC_RESOURCE = 'datasciencecluster default-dsc';
 
 /**
- * Ensure the OGX operator is Managed and ready.
+ * Ensure the LlamaStack operator is Managed and ready.
  * If already Managed, this is a no-op. Otherwise, patches the DSC and waits.
- * Detects the correct DSC component name automatically.
  */
-export const ensureOgxOperator = (): void => {
-  detectDscComponentName().then((componentName) => {
+export const ensureLlamaStackOperator = (): void => {
+  cy.exec(
+    `oc get ${DSC_RESOURCE} -o jsonpath='{.spec.components.llamastackoperator.managementState}'`,
+  ).then((result) => {
+    const state = result.stdout.trim().replace(/'/g, '');
+    if (state === 'Managed') {
+      cy.log('LlamaStack operator already Managed, skipping');
+      return;
+    }
+
+    cy.log(`LlamaStack operator is "${state}", patching to Managed`);
     cy.exec(
-      `oc get ${DSC_RESOURCE} -o jsonpath='{.spec.components.${componentName}.managementState}'`,
-    ).then((result) => {
-      const state = result.stdout.trim().replace(/'/g, '');
-      if (state === 'Managed') {
-        cy.log(`OGX operator (${componentName}) already Managed, skipping`);
-        return;
-      }
+      `oc patch ${DSC_RESOURCE} --type=merge -p '{"spec":{"components":{"llamastackoperator":{"managementState":"Managed"}}}}'`,
+    );
 
-      cy.log(`OGX operator (${componentName}) is "${state}", patching to Managed`);
-      cy.exec(
-        `oc patch ${DSC_RESOURCE} --type=merge -p '{"spec":{"components":{"${componentName}":{"managementState":"Managed"}}}}'`,
-      );
-
-      cy.log('Waiting for OGX operator to be ready');
-      waitForOperatorReady();
-    });
+    cy.log('Waiting for LlamaStack operator to be ready');
+    waitForLlamaStackOperatorReady();
   });
 };
 
 /**
- * Reset the OGX operator to Removed state.
+ * Reset the LlamaStack operator to Removed state.
  * Only call this if the operator was not Managed before the test started.
  */
-export const resetOgxOperator = (): void => {
-  detectDscComponentName().then((componentName) => {
-    cy.log(`Resetting OGX operator (${componentName}) to Removed`);
-    cy.exec(
-      `oc patch ${DSC_RESOURCE} --type=merge -p '{"spec":{"components":{"${componentName}":{"managementState":"Removed"}}}}'`,
-      { failOnNonZeroExit: false },
-    );
-  });
+export const resetLlamaStackOperator = (): void => {
+  cy.log('Resetting LlamaStack operator to Removed');
+  cy.exec(
+    `oc patch ${DSC_RESOURCE} --type=merge -p '{"spec":{"components":{"llamastackoperator":{"managementState":"Removed"}}}}'`,
+    { failOnNonZeroExit: false },
+  );
 };
 
 /**
- * Check if the OGX operator is currently Managed.
+ * Check if the LlamaStack operator is currently Managed.
  */
-export const isOgxOperatorManaged = (): Cypress.Chainable<boolean> =>
-  detectDscComponentName().then((componentName) =>
-    cy
-      .exec(
-        `oc get ${DSC_RESOURCE} -o jsonpath='{.spec.components.${componentName}.managementState}'`,
-        { failOnNonZeroExit: false },
-      )
-      .then((result) => cy.wrap(result.stdout.trim().replace(/'/g, '') === 'Managed')),
-  );
+export const isLlamaStackOperatorManaged = (): Cypress.Chainable<boolean> =>
+  cy
+    .exec(
+      `oc get ${DSC_RESOURCE} -o jsonpath='{.spec.components.llamastackoperator.managementState}'`,
+      { failOnNonZeroExit: false },
+    )
+    .then((result) => cy.wrap(result.stdout.trim().replace(/'/g, '') === 'Managed'));
 
 // ---------------------------------------------------------------------------
 // YAML generation helpers
@@ -340,44 +142,41 @@ const applyFixture = (
   });
 
 // ---------------------------------------------------------------------------
-// OGX config generation
+// LlamaStack config generation
 // ---------------------------------------------------------------------------
 
 /**
- * Build the OGX run.yaml configuration content.
+ * Build the LlamaStack run.yaml configuration content.
  *
  * This mirrors the structure from the gen-ai BFF's NewDefaultLlamaStackConfig()
  * in packages/gen-ai/bff/internal/integrations/kubernetes/llamastack_config.go.
  *
  * The config registers:
  * - An LLM inference provider (remote::vllm) pointing at the LLM InferenceService
- * - A sentence-transformers provider for inline embedding (runs inside OGX pod, no GPU needed)
+ * - A sentence-transformers provider for inline embedding (runs inside LlamaStack pod, no GPU needed)
+ * - An LLM inference provider (remote::vllm) pointing at the LLM InferenceService
  * - A Milvus vector_io provider (remote::milvus) pointing at the Milvus service
  * - Registered models for LLM and embedding (inline)
  */
-/* eslint-disable camelcase -- OGX config.yaml requires snake_case keys */
-const buildOgxConfig = (namespace: string): string => {
+/* eslint-disable camelcase -- LlamaStack config.yaml requires snake_case keys */
+const buildLlamaStackConfig = (namespace: string): string => {
   const llmUrl = `http://${LLM_INFERENCE_SERVICE}-predictor.${namespace}.svc.cluster.local/v1`;
   const milvusUri = `http://${MILVUS_DEPLOYMENT}.${namespace}.svc.cluster.local:${MILVUS_PORT}`;
 
   const config = {
     version: '2',
     distro_name: 'rh',
-    apis: ['inference', 'vector_io', 'files', 'tool_runtime', 'responses'],
+    apis: [
+      'responses',
+      'datasetio',
+      'files',
+      'inference',
+      'safety',
+      'scoring',
+      'tool_runtime',
+      'vector_io',
+    ],
     providers: {
-      files: [
-        {
-          provider_id: 'meta-reference-files',
-          provider_type: 'inline::localfs',
-          config: {
-            storage_dir: '/opt/app-root/src/.llama/distributions/rh/files',
-            metadata_store: { table_name: 'files_metadata', backend: 'sql_default' },
-          },
-        },
-      ],
-      tool_runtime: [
-        { provider_id: 'file-search', provider_type: 'inline::file-search', config: {} },
-      ],
       inference: [
         {
           provider_id: 'sentence-transformers',
@@ -426,6 +225,39 @@ const buildOgxConfig = (namespace: string): string => {
           },
         },
       ],
+      files: [
+        {
+          provider_id: 'meta-reference-files',
+          provider_type: 'inline::localfs',
+          config: {
+            storage_dir: '/opt/app-root/src/.llama/distributions/rh/files',
+            metadata_store: { table_name: 'files_metadata', backend: 'sql_default' },
+          },
+        },
+      ],
+      datasetio: [
+        {
+          provider_id: 'huggingface',
+          provider_type: 'remote::huggingface',
+          config: {
+            kvstore: { namespace: 'datasetio::huggingface', backend: 'kv_default' },
+          },
+        },
+      ],
+      scoring: [
+        { provider_id: 'basic', provider_type: 'inline::basic', config: {} },
+        { provider_id: 'llm-as-judge', provider_type: 'inline::llm-as-judge', config: {} },
+      ],
+      eval: [],
+      tool_runtime: [
+        { provider_id: 'file-search', provider_type: 'inline::file-search', config: {} },
+        {
+          provider_id: 'model-context-protocol',
+          provider_type: 'remote::model-context-protocol',
+          config: {},
+        },
+      ],
+      safety: [],
     },
     metadata_store: {
       type: 'sqlite',
@@ -452,7 +284,7 @@ const buildOgxConfig = (namespace: string): string => {
       default_provider_id: 'milvus-remote',
       default_embedding_model: {
         provider_id: 'sentence-transformers',
-        model_id: 'all-MiniLM-L6-v2',
+        model_id: INLINE_EMBEDDING_MODEL_ID,
       },
     },
     registered_resources: {
@@ -482,13 +314,14 @@ const buildOgxConfig = (namespace: string): string => {
       benchmarks: [],
     },
     server: {
-      port: OGX_PORT,
+      port: LSD_PORT,
     },
   };
 
-  return `# OGX Configuration (generated by AutoRAG E2E infrastructure)\n${yaml.dump(config, {
-    lineWidth: -1,
-  })}`;
+  return `# Llama Stack Configuration (generated by AutoRAG E2E infrastructure)\n${yaml.dump(
+    config,
+    { lineWidth: -1 },
+  )}`;
 };
 /* eslint-enable camelcase */
 
@@ -531,7 +364,7 @@ export const deployLlmModel = (namespace: string): void => {
 
 /**
  * Wait for the LLM InferenceService to be ready.
- * Embedding is handled inline by OGX (no external InferenceService).
+ * Embedding is handled inline by LlamaStack (no external InferenceService).
  */
 export const waitForModelsReady = (namespace: string): void => {
   cy.log('Waiting for LLM InferenceService to be ready');
@@ -539,193 +372,152 @@ export const waitForModelsReady = (namespace: string): void => {
 };
 
 // ---------------------------------------------------------------------------
-// OGX Distribution provisioning
+// LlamaStack Distribution provisioning
 // ---------------------------------------------------------------------------
 
 /**
- * Create the OGX config ConfigMap with the generated run.yaml.
+ * Create the llama-stack-config ConfigMap with the generated run.yaml.
  */
-export const createOgxConfigMap = (namespace: string): Cypress.Chainable<CommandLineResult> => {
-  const configYaml = buildOgxConfig(namespace);
-  const tempFile = `/tmp/ogx_config_${Date.now()}.yaml`;
+export const createLlamaStackConfigMap = (
+  namespace: string,
+): Cypress.Chainable<CommandLineResult> => {
+  const configYaml = buildLlamaStackConfig(namespace);
+  const tempFile = `/tmp/llama_stack_config_${Date.now()}.yaml`;
 
+  // Write the config content to a temp file, then create ConfigMap from it
   cy.writeFile(tempFile, configYaml);
 
   const command =
-    `oc create configmap ${OGX_CONFIG_MAP} -n ${namespace} ` +
+    `oc create configmap ${LSD_CONFIG_MAP} -n ${namespace} ` +
     `--from-file=config.yaml="${tempFile}"`;
 
   return cy.exec(command).then((result) => {
     cy.exec(`rm -f ${tempFile}`);
-    // OGXServer requires the ConfigMap to have the ogx.io/watch label
-    cy.exec(`oc label configmap ${OGX_CONFIG_MAP} -n ${namespace} ogx.io/watch=true --overwrite`, {
-      failOnNonZeroExit: false,
-    });
-    cy.log(`Created ConfigMap ${OGX_CONFIG_MAP} in namespace ${namespace}`);
+    cy.log(`Created ConfigMap ${LSD_CONFIG_MAP} in namespace ${namespace}`);
     return cy.wrap(result);
   });
 };
 
 /**
- * Get the OGX core image using a multi-step discovery:
- *   1. CYPRESS_AUTORAG_OGX_IMAGE env var (explicit override)
+ * Get the LlamaStack core image using a multi-step discovery:
+ *   1. CYPRESS_AUTORAG_LLAMASTACK_IMAGE env var (explicit override)
  *   2. Operator CSV relatedImages (RHOAI clusters that ship the image)
- *   3. OGX operator controller-manager env vars (fallback for clusters
+ *   3. LlamaStack operator controller-manager env vars (fallback for clusters
  *      where the CSV doesn't include the image yet)
  *
  * Works on both ODH and RHOAI clusters.
  */
-const getOgxImage = (): Cypress.Chainable<string> => {
-  const envOverride = Cypress.env('AUTORAG_OGX_IMAGE') as string;
+const getLlamaStackImage = (): Cypress.Chainable<string> => {
+  const envOverride = Cypress.env('AUTORAG_LLAMASTACK_IMAGE') as string;
   if (envOverride) {
-    cy.log(`OGX image (env override): ${envOverride}`);
+    cy.log(`LlamaStack image (env override): ${envOverride}`);
     return cy.wrap(envOverride);
   }
 
-  // Try OGX CSV key first, fall back to legacy LlamaStack key
   const operatorNs = (Cypress.env('OPERATOR_NAMESPACE') as string) || 'redhat-ods-operator';
-  const csvCmd = (key: string) =>
-    `oc get csv -n ${operatorNs} -o jsonpath='{.items[*].spec.relatedImages[?(@.name=="${key}")].image}'`;
-
   return cy
-    .exec(csvCmd('odh_ogx_core_image'), { failOnNonZeroExit: false })
-    .then((ogxCsvResult) => {
-      const ogxCsvImage = ogxCsvResult.stdout.trim().replace(/'/g, '');
-      if (ogxCsvImage) {
-        cy.log(`OGX image (CSV odh_ogx_core_image): ${ogxCsvImage}`);
-        return cy.wrap(ogxCsvImage);
+    .exec(
+      `oc get csv -n ${operatorNs} -o jsonpath='{.items[*].spec.relatedImages[?(@.name=="odh_llama_stack_core_image")].image}'`,
+    )
+    .then((result) => {
+      const csvImage = result.stdout.trim().replace(/'/g, '');
+      if (csvImage) {
+        cy.log(`LlamaStack image (CSV): ${csvImage}`);
+        return cy.wrap(csvImage);
       }
 
+      // Fallback: discover from the LlamaStack operator's controller-manager deployment.
+      // The operator stores its managed image in the RELATED_IMAGE_RH_DISTRIBUTION env var.
+      cy.log(
+        'LlamaStack image not found in operator CSV, checking LlamaStack operator deployment...',
+      );
+      const appsNs = (Cypress.env('APPLICATIONS_NAMESPACE') as string) || 'redhat-ods-applications';
       return cy
-        .exec(csvCmd('odh_llama_stack_core_image'), { failOnNonZeroExit: false })
-        .then((lsCsvResult) => {
-          const lsCsvImage = lsCsvResult.stdout.trim().replace(/'/g, '');
-          if (lsCsvImage) {
-            cy.log(`OGX image (CSV odh_llama_stack_core_image): ${lsCsvImage}`);
-            return cy.wrap(lsCsvImage);
+        .exec(
+          `oc get deployment llama-stack-k8s-operator-controller-manager -n ${appsNs} ` +
+            `-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RELATED_IMAGE_RH_DISTRIBUTION")].value}'`,
+          { failOnNonZeroExit: false },
+        )
+        .then((deployResult) => {
+          const deployImage = deployResult.stdout.trim().replace(/'/g, '');
+          if (deployImage) {
+            cy.log(`LlamaStack image (operator deployment): ${deployImage}`);
+            return cy.wrap(deployImage);
           }
 
-          // Fallback: discover from the operator controller-manager deployment.
-          // Try OGX deployment name first, fall back to legacy LlamaStack name.
-          cy.log('OGX image not found in operator CSV, checking operator deployment...');
-          const appsNs =
-            (Cypress.env('APPLICATIONS_NAMESPACE') as string) || 'redhat-ods-applications';
-          const envJsonpath = `-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RELATED_IMAGE_RH_DISTRIBUTION")].value}'`;
-
-          return cy
-            .exec(
-              `oc get deployment ogx-k8s-operator-controller-manager -n ${appsNs} ${envJsonpath}`,
-              { failOnNonZeroExit: false },
-            )
-            .then((ogxDeployResult) => {
-              const ogxImage = ogxDeployResult.stdout.trim().replace(/'/g, '');
-              if (ogxImage) {
-                cy.log(`OGX image (operator deployment): ${ogxImage}`);
-                return cy.wrap(ogxImage);
-              }
-
-              return cy
-                .exec(
-                  `oc get deployment llama-stack-k8s-operator-controller-manager -n ${appsNs} ${envJsonpath}`,
-                  { failOnNonZeroExit: false },
-                )
-                .then((lsDeployResult) => {
-                  const lsImage = lsDeployResult.stdout.trim().replace(/'/g, '');
-                  if (lsImage) {
-                    cy.log(`OGX image (legacy operator deployment): ${lsImage}`);
-                    return cy.wrap(lsImage);
-                  }
-
-                  throw new Error(
-                    'Could not find OGX core image from operator CSV or operator deployment. ' +
-                      'Set CYPRESS_AUTORAG_OGX_IMAGE env var.',
-                  );
-                });
-            });
+          throw new Error(
+            'Could not find LlamaStack core image from operator CSV or LlamaStack operator deployment. ' +
+              'Set CYPRESS_AUTORAG_LLAMASTACK_IMAGE env var.',
+          );
         });
     });
 };
 
 /**
- * Create the OGX distribution CRD in the namespace.
- * Detects which CRD type (OGXServer or LlamaStackDistribution) is available
- * and creates the appropriate resource.
+ * Create the LlamaStackDistribution CRD in the namespace.
+ * Uses distribution.image (discovered from operator) instead of distribution.name
+ * for compatibility with both ODH and RHOAI clusters.
  */
-export const createOgxDistribution = (namespace: string): Cypress.Chainable<CommandLineResult> =>
-  detectDistributionCrd().then((crd) =>
-    getOgxImage().then((ogxImage) => {
-      const metadata = {
-        name: OGX_SERVER_NAME,
+export const createLlamaStackDistribution = (
+  namespace: string,
+): Cypress.Chainable<CommandLineResult> =>
+  getLlamaStackImage().then((lsImage) => {
+    const lsdYaml = yaml.dump({
+      apiVersion: 'llamastack.io/v1alpha1',
+      kind: 'LlamaStackDistribution',
+      metadata: {
+        name: LSD_NAME,
         namespace,
-        annotations: { 'opendatahub.io/display-name': OGX_SERVER_NAME },
+        annotations: { 'opendatahub.io/display-name': LSD_NAME },
         labels: { 'opendatahub.io/dashboard': 'true' },
-      };
-
-      // OGXServer (v1beta1) and LlamaStackDistribution (v1alpha1) have different specs
-      const cr =
-        crd.kind === 'OGXServer'
-          ? {
-              apiVersion: crd.apiVersion,
-              kind: crd.kind,
-              metadata,
-              spec: {
-                distribution: { image: ogxImage },
-                network: { port: OGX_PORT },
-                overrideConfig: { name: OGX_CONFIG_MAP, key: 'config.yaml' },
+      },
+      spec: {
+        replicas: 1,
+        network: {
+          allowedFrom: { namespaces: [namespace] },
+        },
+        server: {
+          containerSpec: {
+            command: ['/bin/sh', '-c', 'llama stack run /etc/llama-stack/config.yaml'],
+            resources: {
+              requests: { cpu: '250m', memory: '500Mi' },
+              limits: { cpu: '2', memory: '12Gi' },
+            },
+            env: [
+              {
+                name: 'LLAMA_STACK_CONFIG_DIR',
+                value: '/opt/app-root/src/.llama/distributions/rh/',
               },
-            }
-          : {
-              apiVersion: crd.apiVersion,
-              kind: crd.kind,
-              metadata,
-              spec: {
-                replicas: 1,
-                network: { allowedFrom: { namespaces: [namespace] } },
-                server: {
-                  containerSpec: {
-                    command: ['/bin/sh', '-c', 'llama stack run /etc/llama-stack/config.yaml'],
-                    resources: {
-                      requests: { cpu: '250m', memory: '500Mi' },
-                      limits: { cpu: '2', memory: '12Gi' },
-                    },
-                    env: [
-                      {
-                        name: 'LLAMA_STACK_CONFIG_DIR',
-                        value: '/opt/app-root/src/.llama/distributions/rh/',
-                      },
-                      { name: 'VLLM_TLS_VERIFY', value: 'false' },
-                      { name: 'MILVUS_DB_PATH', value: '~/.llama/milvus.db' },
-                    ],
-                    name: 'ogx',
-                    port: OGX_PORT,
-                  },
-                  distribution: { image: ogxImage },
-                  userConfig: { configMapName: OGX_CONFIG_MAP },
-                },
-              },
-            };
+              { name: 'VLLM_TLS_VERIFY', value: 'false' },
+              { name: 'MILVUS_DB_PATH', value: '~/.llama/milvus.db' },
+            ],
+            name: 'llama-stack',
+            port: LSD_PORT,
+          },
+          distribution: { image: lsImage },
+          userConfig: { configMapName: LSD_CONFIG_MAP },
+        },
+      },
+    });
 
-      const crYaml = yaml.dump(cr);
+    const tempFile = `/tmp/lsd_cr_${Date.now()}.yaml`;
+    cy.writeFile(tempFile, lsdYaml);
 
-      const tempFile = `/tmp/ogx_cr_${Date.now()}.yaml`;
-      cy.writeFile(tempFile, crYaml);
-
-      return cy.exec(`oc apply -f "${tempFile}" -n ${namespace}`).then((result) => {
-        cy.exec(`rm -f ${tempFile}`);
-        cy.log(`Created ${crd.kind} ${OGX_SERVER_NAME} with image ${ogxImage}`);
-        return cy.wrap(result);
-      });
-    }),
-  );
+    return cy.exec(`oc apply -f "${tempFile}" -n ${namespace}`).then((result) => {
+      cy.exec(`rm -f ${tempFile}`);
+      cy.log(`Created LlamaStackDistribution ${LSD_NAME} with image ${lsImage}`);
+      return cy.wrap(result);
+    });
+  });
 
 /**
- * Get the OGX Distribution service URL.
- * The operator creates a service named <server-name>-service.
+ * Get the LlamaStack Distribution service URL.
+ * The operator creates a service named <lsd-name>-service.
  */
-export const getOgxServiceURL = (namespace: string): Cypress.Chainable<string> => {
-  const svcName = `${OGX_SERVER_NAME}-service`;
-  const url = `http://${svcName}.${namespace}.svc.cluster.local:${OGX_PORT}`;
-  cy.log(`OGX service URL: ${url}`);
+export const getLlamaStackServiceURL = (namespace: string): Cypress.Chainable<string> => {
+  const svcName = `${LSD_NAME}-service`;
+  const url = `http://${svcName}.${namespace}.svc.cluster.local:${LSD_PORT}`;
+  cy.log(`LlamaStack service URL: ${url}`);
   return cy.wrap(url);
 };
 
@@ -735,12 +527,15 @@ export const getOgxServiceURL = (namespace: string): Cypress.Chainable<string> =
 
 /**
  * Provision the full AutoRAG infrastructure in a namespace:
- * Milvus, LLM model, OGX Distribution, credentials secret.
+ * Milvus, LLM model, embedding model, LlamaStack Distribution, credentials secret.
  *
  * @param namespace The project namespace to provision into.
- * @param ogxSecretName The name for the OGX credentials secret.
+ * @param llamaStackSecretName The name for the LlamaStack credentials secret.
  */
-export const provisionAutoragInfrastructure = (namespace: string, ogxSecretName: string): void => {
+export const provisionAutoragInfrastructure = (
+  namespace: string,
+  llamaStackSecretName: string,
+): void => {
   cy.log(`Using vLLM CPU image: ${getVllmCpuImage()}`);
 
   cy.step('Deploy Milvus standalone');
@@ -755,26 +550,28 @@ export const provisionAutoragInfrastructure = (namespace: string, ogxSecretName:
   cy.step('Wait for LLM model to be ready');
   waitForModelsReady(namespace);
 
-  cy.step('Create OGX config ConfigMap');
-  createOgxConfigMap(namespace);
+  cy.step('Create LlamaStack config ConfigMap');
+  createLlamaStackConfigMap(namespace);
 
-  cy.step('Create OGX Distribution CRD');
-  createOgxDistribution(namespace);
+  cy.step('Create LlamaStackDistribution CRD');
+  createLlamaStackDistribution(namespace);
 
-  cy.step('Wait for OGX Distribution to be ready');
-  waitForDistributionReady(namespace);
+  cy.step('Wait for LlamaStackDistribution to be ready');
+  waitForLlamaStackDistributionReady(namespace);
 
-  cy.step('Discover OGX service URL and create credentials secret');
-  getOgxServiceURL(namespace).then((ogxUrl) => {
-    cy.log(`OGX service URL: ${ogxUrl}`);
+  cy.step('Discover LSD service URL and create credentials secret');
+  getLlamaStackServiceURL(namespace).then((lsdUrl) => {
+    cy.log(`LlamaStack service URL: ${lsdUrl}`);
     // Use a non-empty placeholder for the API key. The upstream pipeline's Python
-    // code gates usage on `if base_url and api_key:` — an empty string is falsy
-    // in Python, causing it to fall into the in-memory code path. "no-auth" is safe.
-    createOgxSecret(namespace, ogxSecretName, ogxUrl, 'no-auth');
+    // code gates LlamaStack usage on `if base_url and api_key:` — an empty string
+    // is falsy in Python, causing it to fall into the in-memory code path which
+    // requires chat_model_url/embedding_model_url params we don't set.
+    // LlamaStack accepts any token when auth is disabled, so "no-auth" is safe.
+    createLlamaStackSecret(namespace, llamaStackSecretName, lsdUrl, 'no-auth');
   });
 
-  cy.step('Create NetworkPolicy for OGX access');
-  allowOgxAccess(namespace);
+  cy.step('Create NetworkPolicy for LlamaStack access');
+  allowLlamaStackAccess(namespace);
 };
 
 // ---------------------------------------------------------------------------
@@ -811,27 +608,23 @@ export const cleanupMilvus = (namespace: string): void => {
 };
 
 /**
- * Clean up OGX distribution and its ConfigMap.
- * Tries both CRD names for forward/backward compatibility.
+ * Clean up LlamaStackDistribution and its ConfigMap.
  */
-export const cleanupOgx = (namespace: string): void => {
-  cy.log('Cleaning up OGX distribution and ConfigMap');
-  cy.exec(`oc delete ogxservers --all -n ${namespace}`, {
-    failOnNonZeroExit: false,
-  });
+export const cleanupLlamaStack = (namespace: string): void => {
+  cy.log('Cleaning up LlamaStackDistribution and ConfigMap');
   cy.exec(`oc delete llamastackdistribution --all -n ${namespace}`, {
     failOnNonZeroExit: false,
   });
-  cy.exec(`oc delete configmap ${OGX_CONFIG_MAP} -n ${namespace}`, {
+  cy.exec(`oc delete configmap ${LSD_CONFIG_MAP} -n ${namespace}`, {
     failOnNonZeroExit: false,
   });
 };
 
 /**
- * Clean up the OGX credentials secret.
+ * Clean up the LlamaStack credentials secret.
  */
-export const cleanupOgxSecret = (namespace: string, secretName: string): void => {
-  cy.log(`Cleaning up OGX secret ${secretName}`);
+export const cleanupLlamaStackSecret = (namespace: string, secretName: string): void => {
+  cy.log(`Cleaning up LlamaStack secret ${secretName}`);
   cy.exec(`oc delete secret ${secretName} -n ${namespace}`, {
     failOnNonZeroExit: false,
   });
@@ -841,9 +634,12 @@ export const cleanupOgxSecret = (namespace: string, secretName: string): void =>
  * Full cleanup of all AutoRAG infrastructure resources.
  * Each cleanup is independent and resilient — failure of one doesn't block others.
  */
-export const cleanupAutoragInfrastructure = (namespace: string, ogxSecretName: string): void => {
+export const cleanupAutoragInfrastructure = (
+  namespace: string,
+  llamaStackSecretName: string,
+): void => {
   cleanupAutoragModels(namespace);
-  cleanupOgx(namespace);
+  cleanupLlamaStack(namespace);
   cleanupMilvus(namespace);
-  cleanupOgxSecret(namespace, ogxSecretName);
+  cleanupLlamaStackSecret(namespace, llamaStackSecretName);
 };

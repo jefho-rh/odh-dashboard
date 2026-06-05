@@ -24,11 +24,11 @@ class AutoragConfigurePage {
     return cy.get('#description');
   }
 
-  findOgxSecretSelector() {
-    return cy.get('[placeholder="Select Open GenAI Stack secret"]');
+  findLlamaStackSecretSelector() {
+    return cy.get('[placeholder="Select Llama Stack secret"]');
   }
 
-  findAddOgxConnectionButton() {
+  findAddLlamaStackConnectionButton() {
     return cy.findByRole('button', { name: /add new.*connection/i });
   }
 
@@ -163,7 +163,7 @@ class AutoragConfigurePage {
    * Common setup for submitting an AutoRAG run.
    *
    * Handles: login, wait for DSPA, navigate to experiments, create run,
-   * fill name/description, select OGX secret, select S3 connection,
+   * fill name/description, select Llama Stack secret, select S3 connection,
    * upload document, and select first available models + vector store.
    *
    * After this, optionally configure metric/patterns, then call `submitRun()`.
@@ -184,10 +184,10 @@ class AutoragConfigurePage {
     this.findNameInput().should('be.visible', { timeout: 30000 }).type(testData.runName);
     this.findDescriptionInput().type(testData.runDescription);
 
-    cy.step('Step 1 - Select OGX secret');
-    this.findOgxSecretSelector().click();
-    this.findOgxSecretSelector().type(testData.ogxSecretName);
-    this.findSelectOption(new RegExp(testData.ogxSecretName, 'i')).click();
+    cy.step('Step 1 - Select Llama Stack secret');
+    this.findLlamaStackSecretSelector().click();
+    this.findLlamaStackSecretSelector().type(testData.llamaStackSecretName);
+    this.findSelectOption(new RegExp(testData.llamaStackSecretName, 'i')).click();
 
     cy.step('Click Next to go to Configure step');
     this.findNextButton().click();

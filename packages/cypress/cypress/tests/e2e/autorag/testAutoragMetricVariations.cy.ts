@@ -2,7 +2,7 @@ import yaml from 'js-yaml';
 import { deleteOpenShiftProject } from '../../../utils/oc_commands/project';
 import { deleteS3TestFiles } from '../../../utils/oc_commands/s3Cleanup';
 import { provisionProjectForAutoX } from '../../../utils/autoXPipelines';
-import { createOgxSecret } from '../../../utils/oc_commands/ogxSecret';
+import { createLlamaStackSecret } from '../../../utils/oc_commands/llamaStackSecret';
 import { retryableBefore } from '../../../utils/retryableHooks';
 import { generateTestUUID } from '../../../utils/uuidGenerator';
 import type { AutoragTestData } from '../../../types';
@@ -12,7 +12,10 @@ import {
   autoragResultsPage,
 } from '../../../pages/autorag';
 import { isAutoragEnabled, setAutoragEnabled } from '../../../utils/oc_commands/autoX';
-import { allowOgxAccess, removeOgxAccess } from '../../../utils/oc_commands/ogxNetworkPolicy';
+import {
+  allowLlamaStackAccess,
+  removeLlamaStackAccess,
+} from '../../../utils/oc_commands/llamaStackNetworkPolicy';
 
 const uuid = generateTestUUID();
 
@@ -36,14 +39,19 @@ describe('AutoRAG Metric Variations E2E', { testIsolation: false }, () => {
       .then(() => setAutoragEnabled(true))
       .then(() => {
         provisionProjectForAutoX(projectName, testData.dspaSecretName, testData.awsBucket);
-        allowOgxAccess(projectName);
+        allowLlamaStackAccess(projectName);
 
-        const ogxUrl = Cypress.env('OGX_URL') as string | undefined;
-        if (!ogxUrl) {
-          throw new Error('OGX_URL must be set in test-variables.yml');
+        const llamaStackUrl = Cypress.env('LLAMA_STACK_URL') as string | undefined;
+        if (!llamaStackUrl) {
+          throw new Error('LLAMA_STACK_URL must be set in test-variables.yml');
         }
-        const ogxApiKey = (Cypress.env('OGX_API_KEY') as string) || '';
-        createOgxSecret(projectName, testData.ogxSecretName, ogxUrl, ogxApiKey);
+        const llamaStackApiKey = (Cypress.env('LLAMA_STACK_API_KEY') as string) || '';
+        createLlamaStackSecret(
+          projectName,
+          testData.llamaStackSecretName,
+          llamaStackUrl,
+          llamaStackApiKey,
+        );
       }),
   );
 
@@ -51,7 +59,7 @@ describe('AutoRAG Metric Variations E2E', { testIsolation: false }, () => {
     if (!autoragWasEnabled) {
       setAutoragEnabled(false);
     }
-    removeOgxAccess(projectName);
+    removeLlamaStackAccess(projectName);
     deleteS3TestFiles(projectName, testData.awsBucket, `*${uuid}*`);
     deleteOpenShiftProject(projectName, { wait: false, ignoreNotFound: true });
   });
@@ -84,12 +92,12 @@ describe('AutoRAG Metric Variations E2E', { testIsolation: false }, () => {
       cy.step('Click Create run from experiments page');
       autoragExperimentsPage.findHeaderCreateRunButton().click();
 
-      cy.step('Fill name and select OGX secret');
+      cy.step('Fill name and select Llama Stack secret');
       autoragConfigurePage.findNameInput().type(`${testData.runName}-faith`);
       autoragConfigurePage.findDescriptionInput().type(testData.runDescription);
-      autoragConfigurePage.findOgxSecretSelector().click();
-      autoragConfigurePage.findOgxSecretSelector().type(testData.ogxSecretName);
-      autoragConfigurePage.findSelectOption(new RegExp(testData.ogxSecretName, 'i')).click();
+      autoragConfigurePage.findLlamaStackSecretSelector().click();
+      autoragConfigurePage.findLlamaStackSecretSelector().type(testData.llamaStackSecretName);
+      autoragConfigurePage.findSelectOption(new RegExp(testData.llamaStackSecretName, 'i')).click();
 
       cy.step('Click Next');
       autoragConfigurePage.findNextButton().click();

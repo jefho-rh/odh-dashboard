@@ -3,9 +3,9 @@ import type { CommandLineResult } from '../../types';
 import { maskSensitiveInfo } from '../maskSensitiveInfo';
 
 /**
- * Type for OGXServer status response
+ * Type for LlamaStackDistribution status response
  */
-type OGXServerState = {
+type LlamaStackDistributionState = {
   status?: {
     phase?: string;
     conditions?: Array<{
@@ -29,18 +29,13 @@ const DEFAULT_POLL_OPTIONS: Required<PollOptions> = {
 };
 
 /**
- * DSC condition name for the OGX operator readiness.
- */
-const DSC_OGX_CONDITION = 'OGXReady';
-
-/**
- * Wait for the OGX operator to be ready by polling the DataScienceCluster status.
- * Checks for the OGXReady condition to be True.
+ * Wait for the LlamaStack operator to be ready by polling the DataScienceCluster status.
+ * Checks for the LlamaStackOperatorReady condition to be True.
  *
  * @param options Polling options (maxAttempts, pollIntervalMs).
  * @returns A Cypress chainable that resolves when the operator is ready.
  */
-export const waitForOGXReady = (
+export const waitForLlamaStackOperatorReady = (
   options: PollOptions = {},
 ): Cypress.Chainable<CommandLineResult> => {
   const { maxAttempts, pollIntervalMs } = { ...DEFAULT_POLL_OPTIONS, ...options };
@@ -48,29 +43,28 @@ export const waitForOGXReady = (
   const totalTimeout = maxAttempts * pollIntervalMs;
 
   const check = (attemptNumber = 1): Cypress.Chainable<CommandLineResult> => {
-    const command = `oc get datasciencecluster default-dsc -o jsonpath='{.status.conditions[?(@.type=="${DSC_OGX_CONDITION}")].status}'`;
+    const command = `oc get datasciencecluster default-dsc -o jsonpath='{.status.conditions[?(@.type=="LlamaStackOperatorReady")].status}'`;
 
     return cy.exec(command, { failOnNonZeroExit: false }).then((result: CommandLineResult) => {
-      const raw = result.stdout.trim();
-      const isReady = raw.split(/\s+/).includes('True');
+      const status = result.stdout.trim();
       const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
-      if (isReady) {
-        cy.log(`OGXReady condition is True (after ${elapsedTime}s)`);
+      if (status === 'True') {
+        cy.log(`✅ LlamaStackOperatorReady condition is True (after ${elapsedTime}s)`);
         return cy.wrap(result);
       }
 
       if (attemptNumber >= maxAttempts) {
         throw new Error(
-          `OGXReady condition not True after ${maxAttempts} attempts (${elapsedTime}s). Current status: ${
-            raw || 'not found'
+          `LlamaStackOperatorReady condition not True after ${maxAttempts} attempts (${elapsedTime}s). Current status: ${
+            status || 'not found'
           }`,
         );
       }
 
       cy.log(
-        `Waiting for OGXReady (attempt ${attemptNumber}/${maxAttempts}, status: ${
-          raw || 'not found'
+        `⏳ Waiting for LlamaStackOperatorReady (attempt ${attemptNumber}/${maxAttempts}, status: ${
+          status || 'not found'
         }, elapsed: ${elapsedTime}s)`,
       );
       // eslint-disable-next-line cypress/no-unnecessary-waiting
@@ -78,19 +72,19 @@ export const waitForOGXReady = (
     });
   };
 
-  cy.step(`Polling for OGXReady condition (max ${totalTimeout / 1000}s)`);
+  cy.step(`Polling for LlamaStackOperatorReady condition (max ${totalTimeout / 1000}s)`);
   return check();
 };
 
 /**
- * Wait for an OGXServer to be Ready in the specified namespace.
+ * Wait for a LlamaStackDistribution to be Ready in the specified namespace.
  * Polls until the phase is "Ready" or max attempts is reached.
  *
- * @param namespace The namespace where the OGXServer is deployed.
+ * @param namespace The namespace where the LlamaStackDistribution is deployed.
  * @param options Polling options (maxAttempts, pollIntervalMs).
- * @returns A Cypress chainable that resolves when the server is ready.
+ * @returns A Cypress chainable that resolves when the distribution is ready.
  */
-export const waitForOGXServerReady = (
+export const waitForLlamaStackDistributionReady = (
   namespace: string,
   options: PollOptions = {},
 ): Cypress.Chainable<CommandLineResult> => {
@@ -99,50 +93,59 @@ export const waitForOGXServerReady = (
   const totalTimeout = maxAttempts * pollIntervalMs;
 
   const check = (attemptNumber = 1): Cypress.Chainable<CommandLineResult> => {
-    const command = `oc get ogxservers -n ${namespace} -o json`;
+    const command = `oc get llamastackdistributions -n ${namespace} -o json`;
 
     return cy.exec(command, { failOnNonZeroExit: false }).then((result: CommandLineResult) => {
       const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
+      // Handle command failure
       if (result.exitCode !== 0) {
         const maskedStderr = maskSensitiveInfo(result.stderr);
         throw new Error(`Command failed with exit code ${result.exitCode}: ${maskedStderr}`);
       }
 
+      // Handle empty output
       if (!result.stdout.trim()) {
         throw new Error('Command succeeded but returned empty output');
       }
 
-      let ogxList: { items: OGXServerState[] };
+      // Parse JSON response
+      let lsdList: { items: LlamaStackDistributionState[] };
       try {
-        ogxList = JSON.parse(result.stdout) as { items: OGXServerState[] };
+        lsdList = JSON.parse(result.stdout) as { items: LlamaStackDistributionState[] };
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown parsing error';
-        throw new Error(`Failed to parse OGXServer JSON: ${errorMsg}`);
+        throw new Error(`Failed to parse LlamaStackDistribution JSON: ${errorMsg}`);
       }
 
-      if (ogxList.items.length === 0) {
+      // Handle no resources found
+      if (lsdList.items.length === 0) {
         if (attemptNumber >= maxAttempts) {
           throw new Error(
-            `No OGXServer found in namespace ${namespace} after ${attemptNumber} attempts`,
+            `No LlamaStackDistribution found in namespace ${namespace} after ${attemptNumber} attempts`,
           );
         }
-        cy.log(`No OGXServer found yet (attempt ${attemptNumber}/${maxAttempts})`);
+        cy.log(`⏳ No LlamaStackDistribution found yet (attempt ${attemptNumber}/${maxAttempts})`);
         // eslint-disable-next-line cypress/no-unnecessary-waiting
         return cy.wait(pollIntervalMs).then(() => check(attemptNumber + 1));
       }
 
-      const ogxServer = ogxList.items[0];
-      const phase = ogxServer.status?.phase ?? 'Unknown';
-      const name = ogxServer.metadata?.name ?? 'unknown';
+      // Check first LlamaStackDistribution (assuming one per namespace)
+      const lsd = lsdList.items[0];
+      const phase = lsd.status?.phase ?? 'Unknown';
+      const name = lsd.metadata?.name ?? 'unknown';
 
+      // Success case
       if (phase === 'Ready') {
-        cy.log(`OGXServer ${name} is Ready in namespace ${namespace} (after ${elapsedTime}s)`);
+        cy.log(
+          `✅ LlamaStackDistribution ${name} is Ready in namespace ${namespace} (after ${elapsedTime}s)`,
+        );
         return cy.wrap(result);
       }
 
+      // Failure case
       if (phase === 'Failed') {
-        const conditions = ogxServer.status?.conditions ?? [];
+        const conditions = lsd.status?.conditions ?? [];
         const errorDetails = conditions
           .map(
             (c) =>
@@ -153,33 +156,39 @@ export const waitForOGXServerReady = (
           .join('\n');
 
         throw new Error(
-          `OGXServer ${name} failed in namespace ${namespace}\nPhase: Failed\n${
+          `LlamaStackDistribution ${name} failed in namespace ${namespace}\nPhase: Failed\n${
             errorDetails || 'No condition details available'
           }`,
         );
       }
 
+      // Timeout case
       if (attemptNumber >= maxAttempts) {
         throw new Error(
-          `OGXServer ${name} did not become Ready within ${
+          `LlamaStackDistribution ${name} did not become Ready within ${
             totalTimeout / 1000
           }s. Current phase: ${phase}`,
         );
       }
 
+      // Continue polling
       cy.log(
-        `OGXServer ${name} phase: "${phase}" (attempt ${attemptNumber}/${maxAttempts}, elapsed: ${elapsedTime}s)`,
+        `⏳ LlamaStackDistribution ${name} phase: "${phase}" (attempt ${attemptNumber}/${maxAttempts}, elapsed: ${elapsedTime}s)`,
       );
       // eslint-disable-next-line cypress/no-unnecessary-waiting
       return cy.wait(pollIntervalMs).then(() => check(attemptNumber + 1));
     });
   };
 
-  cy.step(`Polling for OGXServer Ready in namespace ${namespace} (max ${totalTimeout / 1000}s)`);
+  cy.step(
+    `Polling for LlamaStackDistribution Ready in namespace ${namespace} (max ${
+      totalTimeout / 1000
+    }s)`,
+  );
   return check();
 };
 
 /**
- * @deprecated Use waitForOGXServerReady instead
+ * @deprecated Use waitForLlamaStackDistributionReady instead
  */
-export const checkLlamaStackDistributionReady = waitForOGXServerReady;
+export const checkLlamaStackDistributionReady = waitForLlamaStackDistributionReady;

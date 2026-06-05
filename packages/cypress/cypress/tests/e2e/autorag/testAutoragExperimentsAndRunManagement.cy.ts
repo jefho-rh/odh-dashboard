@@ -3,7 +3,7 @@ import { deleteOpenShiftProject } from '../../../utils/oc_commands/project';
 import { deleteS3TestFiles } from '../../../utils/oc_commands/s3Cleanup';
 import { HTPASSWD_CLUSTER_ADMIN_USER } from '../../../utils/e2eUsers';
 import { provisionProjectForAutoX } from '../../../utils/autoXPipelines';
-import { createOgxSecret } from '../../../utils/oc_commands/ogxSecret';
+import { createLlamaStackSecret } from '../../../utils/oc_commands/llamaStackSecret';
 import { waitForDspaReady } from '../../../utils/oc_commands/dspa';
 import { retryableBefore } from '../../../utils/retryableHooks';
 import { generateTestUUID } from '../../../utils/uuidGenerator';
@@ -14,7 +14,10 @@ import {
   autoragResultsPage,
 } from '../../../pages/autorag';
 import { isAutoragEnabled, setAutoragEnabled } from '../../../utils/oc_commands/autoX';
-import { allowOgxAccess, removeOgxAccess } from '../../../utils/oc_commands/ogxNetworkPolicy';
+import {
+  allowLlamaStackAccess,
+  removeLlamaStackAccess,
+} from '../../../utils/oc_commands/llamaStackNetworkPolicy';
 
 const uuid = generateTestUUID();
 
@@ -38,14 +41,19 @@ describe('AutoRAG Experiments List and Run Management E2E', { testIsolation: fal
       .then(() => setAutoragEnabled(true))
       .then(() => {
         provisionProjectForAutoX(projectName, testData.dspaSecretName, testData.awsBucket);
-        allowOgxAccess(projectName);
+        allowLlamaStackAccess(projectName);
 
-        const ogxUrl = Cypress.env('OGX_URL') as string | undefined;
-        if (!ogxUrl) {
-          throw new Error('OGX_URL must be set in test-variables.yml');
+        const llamaStackUrl = Cypress.env('LLAMA_STACK_URL') as string | undefined;
+        if (!llamaStackUrl) {
+          throw new Error('LLAMA_STACK_URL must be set in test-variables.yml');
         }
-        const ogxApiKey = (Cypress.env('OGX_API_KEY') as string) || '';
-        createOgxSecret(projectName, testData.ogxSecretName, ogxUrl, ogxApiKey);
+        const llamaStackApiKey = (Cypress.env('LLAMA_STACK_API_KEY') as string) || '';
+        createLlamaStackSecret(
+          projectName,
+          testData.llamaStackSecretName,
+          llamaStackUrl,
+          llamaStackApiKey,
+        );
       }),
   );
 
@@ -53,7 +61,7 @@ describe('AutoRAG Experiments List and Run Management E2E', { testIsolation: fal
     if (!autoragWasEnabled) {
       setAutoragEnabled(false);
     }
-    removeOgxAccess(projectName);
+    removeLlamaStackAccess(projectName);
     deleteS3TestFiles(projectName, testData.awsBucket, `*${uuid}*`);
     deleteOpenShiftProject(projectName, { wait: false, ignoreNotFound: true });
   });

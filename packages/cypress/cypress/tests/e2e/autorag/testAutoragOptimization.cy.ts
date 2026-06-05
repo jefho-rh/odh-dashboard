@@ -2,16 +2,19 @@ import yaml from 'js-yaml';
 import { deleteOpenShiftProject } from '../../../utils/oc_commands/project';
 import { deleteS3TestFiles } from '../../../utils/oc_commands/s3Cleanup';
 import { provisionProjectForAutoX } from '../../../utils/autoXPipelines';
-import { createOgxSecret } from '../../../utils/oc_commands/ogxSecret';
+import { createLlamaStackSecret } from '../../../utils/oc_commands/llamaStackSecret';
 import { retryableBefore } from '../../../utils/retryableHooks';
 import { generateTestUUID } from '../../../utils/uuidGenerator';
 import { autoragConfigurePage, autoragResultsPage } from '../../../pages/autorag';
 import { isAutoragEnabled, setAutoragEnabled } from '../../../utils/oc_commands/autoX';
-import { allowOgxAccess, removeOgxAccess } from '../../../utils/oc_commands/ogxNetworkPolicy';
 import {
-  ensureOgxOperator,
-  isOgxOperatorManaged,
-  resetOgxOperator,
+  allowLlamaStackAccess,
+  removeLlamaStackAccess,
+} from '../../../utils/oc_commands/llamaStackNetworkPolicy';
+import {
+  ensureLlamaStackOperator,
+  isLlamaStackOperatorManaged,
+  resetLlamaStackOperator,
   provisionAutoragInfrastructure,
   cleanupAutoragInfrastructure,
 } from '../../../utils/oc_commands/autoragInfra';
@@ -20,11 +23,11 @@ import type { AutoragTestData } from '../../../types';
 const uuid = generateTestUUID();
 
 /**
- * Whether to self-provision OGX infrastructure (models, Milvus, OGX Distribution).
- * When OGX_URL is set, we use an external OGX instance (no provisioning).
+ * Whether to self-provision LlamaStack infrastructure (models, Milvus, LSD).
+ * When LLAMA_STACK_URL is set, we use an external LlamaStack instance (no provisioning).
  * When empty/unset, we provision everything programmatically.
  */
-const isExternalOgx = (): boolean => !!(Cypress.env('OGX_URL') as string);
+const isExternalLlamaStack = (): boolean => !!(Cypress.env('LLAMA_STACK_URL') as string);
 
 describe('AutoRAG Optimization E2E', { testIsolation: false }, () => {
   let testData: AutoragTestData;
@@ -47,31 +50,36 @@ describe('AutoRAG Optimization E2E', { testIsolation: false }, () => {
       )
       .then(() => setAutoragEnabled(true))
       .then(() =>
-        isOgxOperatorManaged().then((wasManaged) => {
+        isLlamaStackOperatorManaged().then((wasManaged) => {
           operatorWasManaged = wasManaged;
         }),
       )
       .then(() => {
-        if (isExternalOgx()) {
-          // External mode: use pre-existing OGX instance
+        if (isExternalLlamaStack()) {
+          // External mode: use pre-existing LlamaStack instance
           provisionProjectForAutoX(projectName, testData.dspaSecretName, testData.awsBucket);
-          allowOgxAccess(projectName);
+          allowLlamaStackAccess(projectName);
 
-          const ogxUrl = Cypress.env('OGX_URL') as string;
-          const ogxApiKey = (Cypress.env('OGX_API_KEY') as string) || '';
-          createOgxSecret(projectName, testData.ogxSecretName, ogxUrl, ogxApiKey);
+          const llamaStackUrl = Cypress.env('LLAMA_STACK_URL') as string;
+          const llamaStackApiKey = (Cypress.env('LLAMA_STACK_API_KEY') as string) || '';
+          createLlamaStackSecret(
+            projectName,
+            testData.llamaStackSecretName,
+            llamaStackUrl,
+            llamaStackApiKey,
+          );
         } else {
-          // Self-provisioned mode: deploy models, Milvus, OGX Distribution
+          // Self-provisioned mode: deploy models, Milvus, LlamaStack Distribution
           selfProvisioned = true;
 
-          cy.step('Ensure OGX operator is Managed');
-          ensureOgxOperator();
+          cy.step('Ensure LlamaStack operator is Managed');
+          ensureLlamaStackOperator();
 
           cy.step('Provision project with DSPA');
           provisionProjectForAutoX(projectName, testData.dspaSecretName, testData.awsBucket);
 
-          cy.step('Provision AutoRAG infrastructure (models, Milvus, OGX)');
-          provisionAutoragInfrastructure(projectName, testData.ogxSecretName);
+          cy.step('Provision AutoRAG infrastructure (models, Milvus, LSD)');
+          provisionAutoragInfrastructure(projectName, testData.llamaStackSecretName);
         }
       }),
   );
@@ -83,16 +91,16 @@ describe('AutoRAG Optimization E2E', { testIsolation: false }, () => {
 
     // Explicit cleanup of each resource (resilient — each call ignores errors)
     if (selfProvisioned) {
-      cleanupAutoragInfrastructure(projectName, testData.ogxSecretName);
+      cleanupAutoragInfrastructure(projectName, testData.llamaStackSecretName);
     }
 
-    removeOgxAccess(projectName);
+    removeLlamaStackAccess(projectName);
     deleteS3TestFiles(projectName, testData.awsBucket, `*${uuid}*`);
     deleteOpenShiftProject(projectName, { wait: true, ignoreNotFound: true, timeout: 300000 });
 
     // Restore operator to previous state if we changed it
     if (selfProvisioned && !operatorWasManaged) {
-      resetOgxOperator();
+      resetLlamaStackOperator();
     }
   });
 
