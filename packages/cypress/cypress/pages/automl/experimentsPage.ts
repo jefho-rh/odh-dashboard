@@ -2,12 +2,15 @@ import { appChrome } from '../appChrome';
 
 class AutomlExperimentsPage {
   visit(namespace: string) {
-    cy.visitWithLogin(`/develop-train/automl/experiments/${namespace}`);
+    cy.visitWithLogin('/');
+    cy.reload();
+    this.findNavItem().should('exist');
+    cy.visit(`/develop-train/automl/experiments/${namespace}`);
     this.wait();
   }
 
   private wait() {
-    cy.findByTestId('app-page-title');
+    cy.findByRole('heading', { name: /automl/i, level: 1 });
     cy.testA11y();
   }
 
@@ -16,15 +19,15 @@ class AutomlExperimentsPage {
   }
 
   findEmptyState(timeout?: number) {
-    return cy.findByTestId('empty-experiments-state', timeout ? { timeout } : undefined);
+    return cy.get('.pf-v6-c-empty-state', timeout ? { timeout } : undefined);
   }
 
   findCreateRunButton() {
-    return cy.findByTestId('create-run-button');
+    return cy.contains('a, button', /create.*run/i);
   }
 
   findHeaderCreateRunButton() {
-    return cy.findByTestId('automl-header-create-experiment-button');
+    return cy.contains('a, button', /create.*run/i);
   }
 }
 

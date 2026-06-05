@@ -1,39 +1,39 @@
 class AutomlResultsPage {
   findStopRunButton() {
-    return cy.findByTestId('stop-run-button');
+    return cy.findByRole('button', { name: /stop/i });
   }
 
   findRetryRunButton() {
-    return cy.findByTestId('retry-run-button');
+    return cy.findByRole('button', { name: /retry/i });
   }
 
   findRunDetailsButton() {
-    return cy.findByTestId('run-details-button');
+    return cy.findByRole('button', { name: /run details/i });
   }
 
   findRunInProgressMessage() {
-    return cy.findByTestId('automl-run-in-progress');
+    return cy.contains('Your AutoML run is currently in progress');
   }
 
   findRunStatusLabel(timeout?: number) {
-    return cy.findByTestId('run-status-label', timeout ? { timeout } : undefined);
+    return cy.contains('.pf-v6-c-label', /cancel|fail/i, timeout ? { timeout } : undefined);
   }
 
   // Leaderboard
   findLeaderboardTable() {
-    return cy.findByTestId('leaderboard-table');
+    return cy.get('[aria-label*="Leaderboard"]');
   }
 
   findLeaderboardLoading() {
-    return cy.findByTestId('leaderboard-loading');
+    return cy.get('[aria-label*="Leaderboard"]').find('.pf-v6-c-skeleton');
   }
 
   findLeaderboardEmpty() {
-    return cy.findByTestId('leaderboard-empty');
+    return cy.contains('No models produced');
   }
 
   findManageColumnsButton() {
-    return cy.findByTestId('manage-columns-button');
+    return cy.findByRole('button', { name: /manage columns/i });
   }
 
   findManageColumnsModal() {
@@ -48,47 +48,42 @@ class AutomlResultsPage {
     return cy.findByRole('dialog').findByRole('button', { name: 'Save' });
   }
 
-  findColumnCheck(column: string) {
-    return cy.findByTestId(`column-check-${column}`);
-  }
-
-  findMetricHeader(metric: string) {
-    return cy.findByTestId(`metric-header-${metric}`);
-  }
-
   findTopRankLabel() {
-    return cy.findByTestId('top-rank-label');
+    return cy.get('.pf-v6-c-label').contains('1').closest('.pf-v6-c-label');
   }
 
   findLeaderboardRow(rank: number) {
-    return cy.findByTestId(`leaderboard-row-${rank}`);
+    return cy
+      .get('[aria-label*="Leaderboard"]')
+      .find('tbody tr')
+      .eq(rank - 1);
   }
 
   findModelLink(rank: number) {
-    return cy.findByTestId(`model-link-${rank}`);
+    return this.findLeaderboardRow(rank).find('a, button.pf-v6-c-button.pf-m-link');
   }
 
   // Run details drawer
   findRunDetailsDrawerPanel() {
-    return cy.findByTestId('run-details-drawer-panel');
+    return cy.get('.pf-v6-c-drawer__panel');
   }
 
   findRunDetailsDrawerClose() {
-    return cy.findByTestId('run-details-drawer-close');
+    return cy.get('.pf-v6-c-drawer__close').find('button');
   }
 
   // Stop run modal
   findStopRunModal() {
-    return cy.findByTestId('stop-run-modal');
+    return cy.findByRole('dialog', { name: /stop/i });
   }
 
   findConfirmStopRunButton() {
-    return cy.findByTestId('confirm-stop-run-button');
+    return this.findStopRunModal().findByRole('button', { name: /^stop$/i });
   }
 
   // Model details modal
   findModelDetailsModal() {
-    return cy.findByTestId('automl-model-details-modal');
+    return cy.get('.pf-v6-c-modal-box');
   }
 
   findModelDetailsModalCloseButton() {
@@ -96,105 +91,75 @@ class AutomlResultsPage {
   }
 
   findModelSelectorDropdown() {
-    return cy.findByTestId('model-selector-dropdown');
+    return this.findModelDetailsModal().find('.pf-v6-c-menu-toggle');
   }
 
   findModelDetailsDownloadButton() {
-    return cy.findByTestId('model-details-download');
+    return this.findModelDetailsModal().findByRole('button', { name: /download/i });
   }
 
   findModelDetailsActionsToggle() {
-    return cy.findByTestId('model-details-actions-toggle');
+    return this.findModelDetailsModal().find('[aria-label*="ctions"]');
   }
 
   findRegisterModelAction() {
-    return cy.findByTestId('model-details-register-model');
+    return cy.findByRole('menuitem', { name: /register/i });
   }
 
   findSaveNotebookAction() {
-    return cy.findByTestId('model-details-save-notebook');
+    return cy.findByRole('menuitem', { name: /save.*notebook/i });
   }
 
   // Model details modal tabs
   findModelDetailsTab(tabKey: string) {
-    return cy.findByTestId(`tab-${tabKey}`);
+    /* eslint-disable camelcase -- tab keys match backend API field names */
+    const tabNames: Record<string, string> = {
+      'model-information': 'model information',
+      'feature-summary': 'feature summary',
+      'model-evaluation': 'model evaluation',
+      'confusion-matrix': 'confusion matrix',
+    };
+    /* eslint-enable camelcase */
+    const name = tabNames[tabKey] ?? tabKey;
+    return cy.findByRole('tab', { name: new RegExp(name, 'i') });
   }
 
   // Feature summary tab
   findFeatureSearchInput() {
-    return cy.findByTestId('feature-search');
+    return this.findModelDetailsModal().find('input[type="search"], input[aria-label*="Search"]');
   }
 
   // Confusion matrix tab
   findConfusionMatrixTable() {
-    return cy.findByTestId('confusion-matrix-table');
+    return this.findModelDetailsModal().find('table');
   }
 
-  findConfusionMatrixGradient() {
-    return cy.findByTestId('confusion-matrix-gradient');
-  }
-
-  // Register model modal
-  findRegisterModelModal() {
-    return cy.findByTestId('register-model-modal');
-  }
-
-  findRegistrySelectToggle() {
-    return cy.findByTestId('registry-select-toggle');
-  }
-
-  findRegistryOption(name: string) {
-    return cy.findByTestId(`registry-option-${name}`);
-  }
-
-  findRegisterModelNameInput() {
-    return cy.findByTestId('model-name-input');
-  }
-
-  findRegisterModelDescriptionInput() {
-    return cy.findByTestId('model-description-input');
-  }
-
-  findRegisterModelSubmitButton() {
-    return cy.findByTestId('register-model-submit');
-  }
-
-  findRegisterModelCancelButton() {
-    return cy.findByTestId('register-model-cancel');
-  }
-
-  findRegisterModelError() {
-    return cy.findByTestId('register-model-error');
-  }
-
-  // Runs table
+  // Runs table (experiments page)
   findRunsTable() {
-    return cy.findByTestId('automl-runs-table');
+    return cy.get('table.pf-v6-c-table');
   }
 
   findRunLink(runId: string) {
-    return cy.findByTestId(`run-name-${runId}`);
+    return cy.contains('a', runId);
   }
 
   findStopRunAction() {
-    return cy.findByTestId('stop-run-action');
+    return cy.findByRole('menuitem', { name: /stop/i });
   }
 
   findRetryRunAction() {
-    return cy.findByTestId('retry-run-action');
+    return cy.findByRole('menuitem', { name: /retry/i });
   }
 
   /**
    * Waits up to `timeoutMs` (default 30 min) for the run to complete.
-   * Asserts that the leaderboard table appears. Fails if a
-   * canceled/failed status label appears instead.
+   * Asserts that the leaderboard table appears.
    */
   waitForRunCompletion(timeoutMs = 1800000) {
-    // TODO: Enable when automl-run-in-progress testid is added to source components
-    // cy.findByTestId('automl-run-in-progress', { timeout: timeoutMs }).should('not.exist');
-    // this.findRunStatusLabel().should('not.exist');
-    // Verify the leaderboard table loaded with results
-    cy.findByTestId('leaderboard-table', { timeout: timeoutMs }).should('be.visible');
+    cy.contains('Your AutoML run is currently in progress', { timeout: timeoutMs }).should(
+      'not.exist',
+    );
+    this.findLeaderboardTable().should('be.visible');
     this.findTopRankLabel().should('exist');
   }
 
@@ -203,14 +168,6 @@ class AutomlResultsPage {
    * - Leaderboard interaction (drawer, manage columns)
    * - Model details modal (tab navigation based on task type)
    * - Download notebook (with window.print stub)
-   *
-   * Tab visibility per task type:
-   * | Tab                | binary | multiclass | regression | timeseries |
-   * |--------------------|--------|------------|------------|------------|
-   * | model-information  | yes    | yes        | yes        | yes        |
-   * | feature-summary    | yes    | yes        | yes        | no         |
-   * | model-evaluation   | yes    | yes        | yes        | yes        |
-   * | confusion-matrix   | yes    | yes        | no         | no         |
    */
   verifyResultsInteraction(taskType: 'binary' | 'multiclass' | 'regression' | 'timeseries') {
     const isClassification = taskType === 'binary' || taskType === 'multiclass';
@@ -249,9 +206,6 @@ class AutomlResultsPage {
 
     if (isClassification) {
       this.findModelDetailsTab('confusion-matrix').should('exist');
-      // TODO: Enable when confusion-matrix-table testid is added to source components
-      // this.findModelDetailsTab('confusion-matrix').click();
-      // this.findConfusionMatrixTable().should('be.visible');
     } else {
       this.findModelDetailsTab('confusion-matrix').should('not.exist');
     }

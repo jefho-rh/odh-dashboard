@@ -1,6 +1,5 @@
 import { automlExperimentsPage } from './experimentsPage';
-// TODO: Re-import when automl-run-in-progress testid is added to source components
-// import { automlResultsPage } from './resultsPage';
+import { automlResultsPage } from './resultsPage';
 import { HTPASSWD_CLUSTER_ADMIN_USER } from '../../utils/e2eUsers';
 import { waitForDspaReady } from '../../utils/oc_commands/dspa';
 import type { AutomlTestData } from '../../types';
@@ -12,7 +11,7 @@ class AutomlConfigurePage {
   }
 
   private wait() {
-    cy.findByTestId('app-page-title');
+    cy.findByRole('heading', { name: /automl/i, level: 1 });
     cy.testA11y();
   }
 
@@ -30,20 +29,20 @@ class AutomlConfigurePage {
   }
 
   findConfigureStepSubtitle() {
-    return cy.findByTestId('configure-step-subtitle');
+    return cy.contains('h2, h3, [class*="title"]', /configurations/i);
   }
 
   // Step 2 - Documents panel
   findSecretSelector() {
-    return cy.findByTestId('aws-secret-selector');
+    return cy.get('[placeholder="Select connection"]');
   }
 
   findSelectFileToggle() {
-    return cy.findByTestId('training-data-source-select-toggle');
+    return cy.get('#document-input-select');
   }
 
   findUploadFileToggle() {
-    return cy.findByTestId('training-data-source-upload-toggle');
+    return cy.get('#document-input-upload');
   }
 
   findUploadFileInput() {
@@ -51,69 +50,56 @@ class AutomlConfigurePage {
   }
 
   findUploadSpinner() {
-    return cy.findByTestId('training-data-upload-spinner');
-  }
-
-  findUploadRemoveAction() {
-    return cy.findByTestId('training-data-upload-remove');
-  }
-
-  findUploadReplaceAction() {
-    return cy.findByTestId('training-data-upload-replace');
+    return cy.get('[aria-label="Uploading file"]');
   }
 
   findBrowseBucketButton() {
-    return cy.findByRole('button', { name: 'Browse bucket' });
+    return cy.findByRole('button', { name: /browse bucket/i });
   }
 
   // File Explorer Modal
   findFileExplorerSearch() {
-    return cy.findByTestId('file-explorer-search');
+    return cy.get('.pf-v6-c-modal-box').find('input[type="search"], input[aria-label*="Search"]');
   }
 
   findFileExplorerTable() {
-    return cy.findByTestId('file-explorer-table');
+    return cy.get('.pf-v6-c-modal-box').find('table');
   }
 
   findFileExplorerRow(filePath: string) {
-    const sanitized = filePath.replace(/[^a-zA-Z0-9-_]/g, '-');
-    return cy.findByTestId(`file-explorer-row-${sanitized}`);
+    return cy.get('.pf-v6-c-modal-box').find('table').contains('td', filePath).parent('tr');
   }
 
   findFileExplorerSelectBtn() {
-    return cy.findByTestId('file-explorer-select-btn');
-  }
-
-  findFileExplorerCancelBtn() {
-    return cy.findByTestId('file-explorer-cancel-btn');
+    return cy.get('.pf-v6-c-modal-box').findByRole('button', { name: /select file/i });
   }
 
   // Step 2 - Configure details panel
   findTaskTypeCard(type: string) {
-    return cy.findByTestId(`task-type-card-${type}`);
+    return cy.contains('.pf-v6-c-card', new RegExp(type, 'i'));
   }
 
   // Tabular fields (binary, multiclass, regression)
   findLabelColumnSelect() {
-    return cy.findByTestId('label_column-select');
+    return cy.get('#label_column').closest('.pf-v6-c-menu-toggle');
   }
 
   // Timeseries fields
   findTargetColumnSelect() {
-    return cy.findByTestId('target-select');
+    return cy.get('#target_column').closest('.pf-v6-c-menu-toggle');
   }
 
   findTimestampColumnSelect() {
-    return cy.findByTestId('timestamp_column-select');
+    return cy.get('#timestamp_column').closest('.pf-v6-c-menu-toggle');
   }
 
   findIdColumnSelect() {
-    return cy.findByTestId('id_column-select');
+    return cy.get('#id_column').closest('.pf-v6-c-menu-toggle');
   }
 
   // Top N models
   findTopNInput() {
-    return cy.findByTestId('top-n-input');
+    return cy.get('#top-n-input').closest('.pf-v6-c-number-input');
   }
 
   setTopN(value: number) {
@@ -126,12 +112,12 @@ class AutomlConfigurePage {
 
   // Upload result
   findUploadedFileCell() {
-    return cy.findByTestId('uploaded-file-cell');
+    return cy.get('[data-label="File"]');
   }
 
   // Submit
   findCreateRunButton() {
-    return cy.findByRole('button', { name: 'Create run' });
+    return cy.findByRole('button', { name: /create run/i });
   }
 
   /**
@@ -152,17 +138,16 @@ class AutomlConfigurePage {
     automlExperimentsPage.visit(projectName);
 
     cy.step('Wait for pipeline server to be fully ready and click Create run');
-    automlExperimentsPage.findEmptyState(120000).should('exist');
+    cy.findByRole('heading', { name: /automl/i, level: 1, timeout: 120000 }).should('be.visible');
     automlExperimentsPage.findCreateRunButton().click();
 
     cy.step('Step 1 - Fill name and description');
-    this.findNameInput().should('be.visible').type(testData.runName);
+    this.findNameInput().should('be.visible', { timeout: 30000 }).type(testData.runName);
     this.findDescriptionInput().type(testData.runDescription);
     this.findNextButton().click();
 
-    // TODO: Enable when configure-step-subtitle testid is added to source components
-    // cy.step('Verify configure step subtitle shows the run name');
-    // this.findConfigureStepSubtitle().should('contain.text', testData.runName);
+    cy.step('Verify configure step subtitle shows the run name');
+    this.findConfigureStepSubtitle().should('contain.text', testData.runName);
 
     cy.step('Select S3 connection');
     this.findSecretSelector().click();
@@ -179,15 +164,19 @@ class AutomlConfigurePage {
 
     cy.step('Wait for upload to complete');
     this.findUploadSpinner().should('not.exist');
-    // TODO: Enable when uploaded-file-cell testid is added to source components
-    // this.findUploadedFileCell().should('be.visible');
+    this.findUploadedFileCell().should('be.visible');
 
     cy.step('Verify uploaded file is browsable in file explorer and select it');
-    this.findSelectFileToggle().find('button').click();
+    this.findSelectFileToggle().click();
     this.findBrowseBucketButton().click();
     this.findFileExplorerTable().should('be.visible');
     this.findFileExplorerSearch().type(uploadFileName);
-    this.findFileExplorerTable().contains('td', uploadFileName).should('be.visible').click();
+    this.findFileExplorerTable()
+      .contains('td', uploadFileName)
+      .should('be.visible')
+      .closest('tr')
+      .find('input[type="radio"]')
+      .click();
     this.findFileExplorerSelectBtn().click();
   }
 
@@ -202,9 +191,8 @@ class AutomlConfigurePage {
     cy.step('Verify redirect to results page');
     cy.url().should('include', '/develop-train/automl/results/');
 
-    // TODO: Enable when automl-run-in-progress testid is added to source components
-    // cy.step('Verify the run is in progress');
-    // automlResultsPage.findRunInProgressMessage().should('be.visible');
+    cy.step('Verify the run is in progress');
+    automlResultsPage.findRunInProgressMessage().should('be.visible');
   }
 }
 
