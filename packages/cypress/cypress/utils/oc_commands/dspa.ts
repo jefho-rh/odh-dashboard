@@ -68,7 +68,12 @@ export const waitForDspaReady = (
       if (result.exitCode !== 0) {
         cy.log(`DSPA wait failed (exit ${result.exitCode}): ${maskSensitiveInfo(result.stderr)}`);
       } else {
-        cy.log('DSPA is ready');
+        cy.log('DSPA is ready — waiting for serving cert to become valid');
+        // The service-ca-operator can issue certs with notBefore up to ~15s in
+        // the future on disconnected clusters. The BFF rejects TLS connections
+        // until the cert is valid, so wait past that window.
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(20000);
       }
     });
 };
