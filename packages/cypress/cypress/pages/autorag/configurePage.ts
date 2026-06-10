@@ -1,3 +1,9 @@
+import { autoragExperimentsPage } from './experimentsPage';
+import { autoragResultsPage } from './resultsPage';
+import { HTPASSWD_CLUSTER_ADMIN_USER } from '../../utils/e2eUsers';
+import { waitForDspaReady } from '../../utils/oc_commands/dspa';
+import type { AutoragTestData } from '../../types';
+
 class AutoragConfigurePage {
   visit(namespace: string) {
     cy.visitWithLogin(`/gen-ai-studio/autorag/configure/${namespace}`);
@@ -5,151 +11,242 @@ class AutoragConfigurePage {
   }
 
   private wait() {
-    cy.findByTestId('app-page-title');
+    cy.findByRole('heading', { name: /autorag/i, level: 1 });
     cy.testA11y();
   }
 
   // Step 1 - Create
   findNameInput() {
-    return cy.findByTestId('autorag-name-input');
+    return cy.get('#display_name');
   }
 
   findDescriptionInput() {
-    return cy.findByTestId('autorag-description-input');
+    return cy.get('#description');
   }
 
   findOgxSecretSelector() {
-    return cy.findByTestId('ogx-secret-selector');
+    return cy.get('[placeholder="Select Open GenAI Stack secret"]');
   }
 
   findAddOgxConnectionButton() {
-    return cy.findByTestId('add-ogx-connection-button');
+    return cy.findByRole('button', { name: /add new.*connection/i });
   }
 
   findNextButton() {
-    return cy.findByTestId('autorag-next-button');
+    return cy.findByRole('button', { name: /next/i });
   }
 
   findConfigureStepSubtitle() {
-    return cy.findByTestId('configure-step-subtitle');
+    return cy.contains('h2, h3, [class*="title"]', /configurations/i);
   }
 
   // Step 2 - Documents panel
   findSecretSelector() {
-    return cy.findByTestId('aws-secret-selector');
+    return cy.get('[placeholder="Select connection"]');
   }
 
   findSelectFileToggle() {
-    return cy.findByTestId('input-data-source-select-toggle');
+    return cy.get('#document-input-select');
   }
 
   findUploadFileToggle() {
-    return cy.findByTestId('input-data-source-upload-toggle');
+    return cy.get('#document-input-upload');
   }
 
   findUploadFileInput() {
-    return cy.findByTestId('autorag-upload-file-input');
+    return cy.get('input[type="file"]').first();
   }
 
   findUploadSpinner() {
-    return cy.findByTestId('input-data-upload-spinner');
+    return cy.get('[aria-label="Uploading file"]');
   }
 
   findBrowseBucketButton() {
-    return cy.findByTestId('browse-bucket-button');
+    return cy.findByRole('button', { name: /browse bucket/i });
   }
 
   // File Explorer
   findFileExplorerSearch() {
-    return cy.findByTestId('file-explorer-search');
+    return cy.get('.pf-v6-c-modal-box').find('input[type="search"], input[aria-label*="Search"]');
   }
 
   findFileExplorerTable() {
-    return cy.findByTestId('file-explorer-table');
+    return cy.get('.pf-v6-c-modal-box').find('table');
   }
 
   findFileExplorerRow(filePath: string) {
-    const sanitized = filePath.replace(/[^a-zA-Z0-9-_]/g, '-');
-    return cy.findByTestId(`file-explorer-row-${sanitized}`);
+    return cy.get('.pf-v6-c-modal-box').find('table').contains('td', filePath).parent('tr');
   }
 
   findFileExplorerSelectBtn() {
-    return cy.findByTestId('file-explorer-select-btn');
+    return cy.get('.pf-v6-c-modal-box').findByRole('button', { name: /select file/i });
   }
 
   // Step 2 - Model selection
   findModelSelectionSection() {
-    return cy.findByTestId('model-selection-section');
+    return cy.get('[aria-label="Model selection tabs"]');
   }
 
   findModelTable(modelType: 'llm' | 'embedding') {
-    return cy.findByTestId(`${modelType}-models-table`);
+    const label = modelType === 'llm' ? 'Foundation models' : 'Embedding models';
+    return cy.get(`[aria-label="${label} table"]`);
   }
 
   findModelRow(modelId: string) {
-    return cy.findByTestId(`model-row-${modelId}`);
+    return cy.contains('tr', modelId);
   }
 
   // Step 2 - Vector store
   findVectorStoreSelector() {
-    return cy.findByTestId('vector-store-select-toggle');
+    return cy.contains('.pf-v6-c-menu-toggle', /vector/i, { timeout: 30000 });
   }
 
   findVectorStoreOption(providerId: string) {
-    return cy.findByTestId(`vector-store-option-${providerId}`);
+    return cy.get('.pf-v6-c-menu__list').contains('button', providerId);
   }
 
   findFirstVectorStoreOption() {
-    return cy.findByTestId('vector-store-select-list').find('li').first();
+    return cy.get('.pf-v6-c-menu__list').find('li').first();
   }
 
-  // Step 2 - Optimization
+  // Step 2 - Optimization — match by the selected metric text in the toggle
   findOptimizationMetricSelect() {
-    return cy.findByTestId('optimization-metric-select');
+    return cy.contains('.pf-v6-c-menu-toggle', /faithfulness|correctness/i);
   }
 
   findMetricOption(value: string) {
-    return cy.findByTestId(`metric-option-${value}`);
+    const pattern = value.replace(/_/g, '[_ ]');
+    return cy.get('.pf-v6-c-menu__list').contains('button', new RegExp(pattern, 'i'));
   }
 
   findMaxRagPatternsInput() {
-    return cy.findByTestId('max-rag-patterns-input');
+    return cy.get('#max-rag-patterns').closest('.pf-v6-c-number-input');
   }
 
-  findMaxRagPatternsInputField() {
-    return this.findMaxRagPatternsInput().find('input');
+  setMaxRagPatterns(value: number) {
+    this.findMaxRagPatternsInput().find('input').type(`{selectall}${value}`);
   }
 
   // Step 2 - Experiment settings
   findExperimentSettingsModal() {
-    return cy.findByTestId('experiment-settings-modal');
+    return cy.findByRole('dialog', { name: /model configuration/i });
   }
 
   findExperimentSettingsSave() {
-    return cy.findByTestId('experiment-settings-save');
+    return this.findExperimentSettingsModal().findByRole('button', { name: /save/i });
   }
 
   findExperimentSettingsCancel() {
-    return cy.findByTestId('experiment-settings-cancel');
+    return this.findExperimentSettingsModal().findByRole('button', { name: /cancel/i });
   }
 
   findSelectOption(name: string | RegExp) {
     return cy.findByRole('option', { name: name instanceof RegExp ? name : new RegExp(name) });
   }
 
-  // Evaluation dataset — PF FileUpload renders input with id from field.name
+  // Evaluation dataset
   findEvaluationFileInput() {
-    return cy.findByTestId('evaluation-file-selector').find('input[type="file"]');
+    return cy.get('input[type="file"]').last();
   }
 
   // Uploaded file table
   findUploadedFileCell() {
-    return cy.findByTestId('uploaded-file-cell');
+    return cy.get('[data-label="File"]');
   }
 
   // Submit
   findCreateRunButton() {
-    return cy.findByTestId('autorag-create-run-button');
+    return cy.findByRole('button', { name: /create run/i });
+  }
+
+  /**
+   * Common setup for submitting an AutoRAG run.
+   *
+   * Handles: login, wait for DSPA, navigate to experiments, create run,
+   * fill name/description, select OGX secret, select S3 connection,
+   * upload document, and select first available models + vector store.
+   *
+   * After this, optionally configure metric/patterns, then call `submitRun()`.
+   */
+  submitRunSetup(testData: AutoragTestData, projectName: string, uuid: string) {
+    cy.step('Login and wait for pipeline server');
+    cy.visitWithLogin('/', HTPASSWD_CLUSTER_ADMIN_USER);
+    waitForDspaReady(projectName);
+
+    cy.step('Navigate to AutoRAG experiments page');
+    autoragExperimentsPage.visit(projectName);
+
+    cy.step('Wait for pipeline server to be fully ready and click Create run');
+    cy.findByRole('heading', { name: /autorag/i, level: 1, timeout: 120000 }).should('be.visible');
+    autoragExperimentsPage.findCreateRunButton().click();
+
+    cy.step('Step 1 - Fill name and description');
+    this.findNameInput().should('be.visible', { timeout: 30000 }).type(testData.runName);
+    this.findDescriptionInput().type(testData.runDescription);
+
+    cy.step('Step 1 - Select OGX secret');
+    this.findOgxSecretSelector().click();
+    this.findOgxSecretSelector().type(testData.ogxSecretName);
+    this.findSelectOption(new RegExp(testData.ogxSecretName, 'i')).click();
+
+    cy.step('Click Next to go to Configure step');
+    this.findNextButton().click();
+
+    cy.step('Verify configure step subtitle shows the run name');
+    this.findConfigureStepSubtitle().should('contain.text', testData.runName);
+
+    cy.step('Select S3 connection');
+    this.findSecretSelector().click();
+    this.findSecretSelector().type(testData.s3SecretName);
+    this.findSelectOption(new RegExp(testData.s3SecretName, 'i')).click();
+
+    cy.step('Upload document file');
+    const uploadFileName = `${testData.documentFile.replace('.txt', '')}-${uuid}.txt`;
+    this.findUploadFileToggle().click();
+    this.findUploadFileInput().selectFile(
+      { contents: `resources/autorag/${testData.documentFile}`, fileName: uploadFileName },
+      { force: true },
+    );
+
+    cy.step('Wait for upload to complete');
+    this.findUploadSpinner().should('not.exist');
+    this.findUploadedFileCell().should('be.visible');
+
+    cy.step('Verify uploaded file is browsable in file explorer and select it');
+    this.findSelectFileToggle().click();
+    this.findBrowseBucketButton().click();
+    this.findFileExplorerTable().should('be.visible');
+    this.findFileExplorerSearch().type(uploadFileName);
+    this.findFileExplorerTable().contains('td', uploadFileName).should('be.visible').click();
+    this.findFileExplorerSelectBtn().click();
+
+    cy.step('Upload evaluation dataset JSON');
+    const evalFileName = `${testData.evaluationFile.replace('.json', '')}-${uuid}.json`;
+    this.findEvaluationFileInput().selectFile(
+      { contents: `resources/autorag/${testData.evaluationFile}`, fileName: evalFileName },
+      { force: true },
+    );
+
+    cy.step('Select first available vector store');
+    this.findVectorStoreSelector().click();
+    this.findFirstVectorStoreOption().should('be.visible').click();
+    // Verify the selection was applied — dropdown should close and placeholder text should be gone
+    cy.contains('.pf-v6-c-menu-toggle', /select vector/i).should('not.exist');
+  }
+
+  /**
+   * Submit the AutoRAG run and verify redirect to results page.
+   * Call after `submitRunSetup()` and any custom configuration.
+   */
+  submitRun() {
+    cy.step('Submit the form');
+    this.findCreateRunButton().click();
+
+    cy.step('Verify redirect to results page');
+    cy.url().should('include', '/gen-ai-studio/autorag/results/');
+
+    cy.step('Verify the run is in progress');
+    autoragResultsPage.findRunInProgressMessage().should('be.visible');
   }
 }
 
