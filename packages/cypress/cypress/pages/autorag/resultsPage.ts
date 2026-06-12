@@ -1,39 +1,39 @@
 class AutoragResultsPage {
   findStopRunButton() {
-    return cy.findByRole('button', { name: /stop/i });
+    return cy.findByTestId('stop-run-button');
   }
 
   findRetryRunButton() {
-    return cy.findByRole('button', { name: /retry/i });
+    return cy.findByTestId('retry-run-button');
   }
 
   findRunDetailsButton() {
-    return cy.findByRole('button', { name: /run details/i });
+    return cy.findByTestId('run-details-button');
   }
 
-  findRunInProgressMessage() {
-    return cy.contains('Your AutoRAG run is currently in progress');
+  findRunInProgressMessage(timeout?: number) {
+    return cy.findByTestId('autorag-run-in-progress', timeout ? { timeout } : undefined);
   }
 
   findRunStatusLabel(timeout?: number) {
-    return cy.contains('.pf-v6-c-label', /cancel|fail/i, timeout ? { timeout } : undefined);
+    return cy.findByTestId('run-status-label', timeout ? { timeout } : undefined);
   }
 
   // Leaderboard
   findLeaderboardTable() {
-    return cy.get('[aria-label="AutoRAG Pattern Leaderboard"]');
+    return cy.findByTestId('leaderboard-table');
   }
 
   findLeaderboardLoading() {
-    return cy.get('[aria-label="AutoRAG Pattern Leaderboard"]').find('.pf-v6-c-skeleton');
+    return cy.findByTestId('leaderboard-loading');
   }
 
   findLeaderboardEmpty() {
-    return cy.contains('No patterns produced');
+    return cy.findByTestId('leaderboard-empty');
   }
 
   findManageColumnsButton() {
-    return cy.findByRole('button', { name: /manage columns/i });
+    return cy.findByTestId('manage-columns-button');
   }
 
   findManageColumnsModal() {
@@ -41,49 +41,46 @@ class AutoragResultsPage {
   }
 
   findManageColumnsCancelButton() {
-    return cy.findByRole('dialog').findByRole('button', { name: 'Cancel' });
+    return cy.get('[data-ouia-component-id="ColumnManagementModal-cancel-button"]');
   }
 
   findManageColumnsSaveButton() {
-    return cy.findByRole('dialog').findByRole('button', { name: 'Save' });
+    return cy.get('[data-ouia-component-id="ColumnManagementModal-save-button"]');
   }
 
   findTopRankLabel() {
-    return cy.get('.pf-v6-c-label').contains('1').closest('.pf-v6-c-label');
+    return cy.findByTestId('top-rank-label');
   }
 
   findLeaderboardRow(rank: number) {
-    return cy
-      .get('[aria-label="AutoRAG Pattern Leaderboard"]')
-      .find('tbody tr')
-      .eq(rank - 1);
+    return cy.findByTestId(`leaderboard-row-${rank}`);
   }
 
   findPatternLink(rank: number) {
-    return this.findLeaderboardRow(rank).find('a, button.pf-v6-c-button.pf-m-link');
+    return cy.findByTestId(`pattern-link-${rank}`);
   }
 
   // Run details drawer
   findRunDetailsDrawerPanel() {
-    return cy.get('.pf-v6-c-drawer__panel');
+    return cy.findByTestId('run-details-drawer-panel');
   }
 
   findRunDetailsDrawerClose() {
-    return cy.get('.pf-v6-c-drawer__close').find('button');
+    return cy.findByTestId('run-details-drawer-close');
   }
 
   // Stop run modal
   findStopRunModal() {
-    return cy.findByRole('dialog', { name: /stop/i });
+    return cy.findByTestId('stop-run-modal');
   }
 
   findConfirmStopRunButton() {
-    return this.findStopRunModal().findByRole('button', { name: /^stop$/i });
+    return cy.findByTestId('confirm-stop-run-button');
   }
 
   // Pattern details modal
   findPatternDetailsModal() {
-    return cy.get('.pf-v6-c-modal-box');
+    return cy.findByTestId('pattern-details-modal');
   }
 
   findPatternDetailsModalCloseButton() {
@@ -91,158 +88,50 @@ class AutoragResultsPage {
   }
 
   findPatternSelectorDropdown() {
-    return this.findPatternDetailsModal().find('.pf-v6-c-menu-toggle');
+    return cy.findByTestId('pattern-selector-dropdown');
   }
 
   findPatternDetailsDownload() {
-    return this.findPatternDetailsModal().findByRole('button', { name: /download/i });
+    return cy.findByTestId('pattern-details-download');
   }
 
   findSaveNotebookToggle() {
-    return this.findPatternDetailsModal().find('.pf-v6-c-menu-toggle:contains("Save as notebook")');
+    return cy.findByTestId('pattern-details-save-notebook-toggle');
   }
 
   findSaveIndexingNotebook() {
-    return cy.get('.pf-v6-c-menu__list').contains('button', /indexing/i);
+    return cy.findByTestId('pattern-details-save-indexing-notebook');
   }
 
   findSaveInferenceNotebook() {
-    return cy.get('.pf-v6-c-menu__list').contains('button', /inference/i);
+    return cy.findByTestId('pattern-details-save-inference-notebook');
   }
 
-  // Pattern details tabs — use case-insensitive regex to handle casing differences across builds
+  // Pattern details tabs
   findPatternDetailsTab(tabKey: string) {
-    /* eslint-disable camelcase -- tab keys match backend API field names */
-    const tabNames: Record<string, string> = {
-      pattern_information: 'pattern information',
-      vector_store: 'vector store',
-      chunking: 'chunking',
-      embedding: 'embedding',
-      retrieval: 'retrieval',
-      generation: 'generation',
-      sample_qa: 'sample q&a',
-    };
-    /* eslint-enable camelcase */
-    const name = tabNames[tabKey] ?? tabKey;
-    return cy.findByRole('tab', { name: new RegExp(name, 'i') });
+    return cy.findByTestId(`tab-${tabKey}`);
   }
 
   // Runs table (experiments page)
   findRunsTable() {
-    return cy.get('table.pf-v6-c-table');
+    return cy.findByTestId('autorag-runs-table');
   }
 
   findRunLink(runId: string) {
-    return cy.contains('a', runId);
+    return cy.findByTestId(`run-name-${runId}`);
   }
 
   findStopRunAction() {
-    return cy.findByRole('menuitem', { name: /stop/i });
+    return cy.findByTestId('stop-run-action');
   }
 
   findRetryRunAction() {
-    return cy.findByRole('menuitem', { name: /retry/i });
-  }
-
-  /**
-   * Waits up to `timeoutMs` (default 30 min) for the run to complete.
-   * Asserts that the leaderboard table appears. Fails if a
-   * canceled/failed status label appears instead.
-   */
-  waitForRunCompletion(timeoutMs = 1800000) {
-    cy.contains('Your AutoRAG run is currently in progress', { timeout: timeoutMs }).should(
-      'not.exist',
-    );
-    this.findLeaderboardTable().should('be.visible');
-    this.findTopRankLabel().should('exist');
+    return cy.findByTestId('retry-run-action');
   }
 
   // Score type radios (inside pattern details overview tab)
   findScoreTypeRadio(type: 'mean' | 'ci_high' | 'ci_low') {
-    /* eslint-disable camelcase -- keys match backend score type identifiers */
-    const labels: Record<string, string> = {
-      mean: 'Mean',
-      ci_high: 'CI high',
-      ci_low: 'CI low',
-    };
-    /* eslint-enable camelcase */
-    return cy.findByRole('radio', { name: new RegExp(labels[type], 'i') });
-  }
-
-  /**
-   * Runs the common post-run results verification flow:
-   * - Leaderboard interaction (drawer, manage columns)
-   * - Pattern details modal with all tabs
-   * - Score type radio buttons
-   * - Notebook downloads
-   */
-  verifyResultsInteraction() {
-    cy.step('Verify leaderboard has at least one pattern row');
-    this.findLeaderboardRow(1).should('exist');
-
-    cy.step('Open and close run details drawer');
-    this.findRunDetailsButton().click();
-    this.findRunDetailsDrawerPanel().should('be.visible');
-    this.findRunDetailsDrawerClose().click();
-    this.findRunDetailsDrawerPanel().should('not.be.visible');
-
-    cy.step('Open manage columns modal and close it');
-    this.findManageColumnsButton().click();
-    this.findManageColumnsModal().should('be.visible');
-    this.findManageColumnsCancelButton().click();
-    this.findManageColumnsModal().should('not.exist');
-
-    cy.step('Open pattern details modal for top-ranked pattern');
-    this.findPatternLink(1).click();
-    this.findPatternDetailsModal().should('be.visible');
-
-    cy.step('Verify Pattern information tab (overview) is active by default');
-    this.findPatternDetailsTab('pattern_information').should('exist');
-
-    cy.step('Verify score type radio buttons on overview tab');
-    this.findScoreTypeRadio('mean').should('exist');
-    this.findScoreTypeRadio('ci_high').should('exist');
-    this.findScoreTypeRadio('ci_low').should('exist');
-    this.findScoreTypeRadio('ci_high').click();
-    this.findScoreTypeRadio('mean').click();
-
-    cy.step('Navigate to Vector store settings tab');
-    this.findPatternDetailsTab('vector_store').should('exist').click();
-
-    cy.step('Navigate to Chunking settings tab');
-    this.findPatternDetailsTab('chunking').should('exist').click();
-
-    cy.step('Navigate to Embedding settings tab');
-    this.findPatternDetailsTab('embedding').should('exist').click();
-
-    cy.step('Navigate to Retrieval settings tab');
-    this.findPatternDetailsTab('retrieval').should('exist').click();
-
-    cy.step('Navigate to Generation settings tab');
-    this.findPatternDetailsTab('generation').should('exist').click();
-
-    cy.step('Check if Sample Q&A tab exists (conditional on evaluation results)');
-    this.findPatternDetailsModal().then(($modal) => {
-      const hasSampleQA = $modal.find('[role="tab"]').filter(function sampleQaFilter() {
-        return /sample\s+q&?a/i.test(Cypress.$(this).text());
-      }).length;
-      if (hasSampleQA) {
-        this.findPatternDetailsTab('sample_qa').click();
-      }
-    });
-
-    cy.step('Close pattern details modal');
-    this.findPatternDetailsModalCloseButton().click();
-    this.findPatternDetailsModal().should('not.exist');
-
-    cy.step('Download notebook (stub window.print)');
-    this.findPatternLink(1).click();
-    this.findPatternDetailsModal().should('be.visible');
-    cy.window().then((win) => cy.stub(win, 'print'));
-    this.findPatternDetailsDownload().click();
-    cy.window().its('print').should('have.been.calledOnce');
-    this.findPatternDetailsModalCloseButton().click();
-    this.findPatternDetailsModal().should('not.exist');
+    return cy.findByTestId(`score-type-${type}`);
   }
 }
 
