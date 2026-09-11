@@ -147,6 +147,13 @@ func validateProfileAgainstProvider(profile models.HardwareProfile, provider eva
 		availableQuantity, availableValue := profileResourceQuantity(profileResource, resourceName)
 		requiredQuantity, err := resource.ParseQuantity(required)
 		if err != nil {
+			mismatches = append(mismatches, models.HardwareProfileResourceMismatch{
+				ProviderID: providerID(provider),
+				Resource:   resourceName,
+				Required:   required,
+				Available:  availableValue,
+				Message:    fmt.Sprintf("Evaluation provider requires an invalid %s resource quantity", resourceName),
+			})
 			return
 		}
 		if availableQuantity == nil || availableQuantity.Cmp(requiredQuantity) < 0 {

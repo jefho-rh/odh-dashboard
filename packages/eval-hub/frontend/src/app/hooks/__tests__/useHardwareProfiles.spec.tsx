@@ -2,26 +2,16 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { waitFor } from '@testing-library/react';
-import { getHardwareProfiles, getKueueAvailability } from '~/app/api/k8s';
+import { getHardwareProfiles } from '~/app/api/k8s';
 import { renderHook } from '~/__tests__/unit/testUtils/hooks';
 import { useHardwareProfiles } from '~/app/hooks/useHardwareProfiles';
-import type { HardwareProfile, KueueAvailability } from '~/app/types';
+import type { HardwareProfile } from '~/app/types';
 
 jest.mock('~/app/api/k8s', () => ({
   getHardwareProfiles: jest.fn(),
-  getKueueAvailability: jest.fn(),
 }));
 
 const mockGetHardwareProfiles = jest.mocked(getHardwareProfiles);
-const mockGetKueueAvailability = jest.mocked(getKueueAvailability);
-
-const availability: KueueAvailability = {
-  enabled: true,
-  cluster_enabled: true,
-  namespace_managed: true,
-  local_queues_available: true,
-  local_queue_names: ['gpu-default'],
-};
 
 const profile: HardwareProfile = {
   name: 'gpu-small',
@@ -52,11 +42,9 @@ describe('useHardwareProfiles', () => {
     expect(result.result.current.loaded).toBe(false);
     expect(result.result.current.profiles).toEqual([]);
     expect(mockGetHardwareProfiles).not.toHaveBeenCalled();
-    expect(mockGetKueueAvailability).not.toHaveBeenCalled();
   });
 
-  it('loads availability and profiles through a cached query', async () => {
-    mockGetKueueAvailability.mockReturnValue(() => Promise.resolve(availability));
+  it('loads profiles through a cached query', async () => {
     mockGetHardwareProfiles.mockReturnValue(() => Promise.resolve([profile]));
     const queryClient = makeQueryClient();
 
@@ -66,7 +54,6 @@ describe('useHardwareProfiles', () => {
 
     await waitFor(() => expect(first.result.current.loaded).toBe(true));
 
-    expect(first.result.current.availability).toEqual(availability);
     expect(first.result.current.profiles).toEqual([profile]);
 
     const second = renderHook(() => useHardwareProfiles('test-ns'), {
@@ -74,13 +61,11 @@ describe('useHardwareProfiles', () => {
     });
     expect(second.result.current.profiles).toEqual([profile]);
     expect(mockGetHardwareProfiles).toHaveBeenCalledTimes(1);
-    expect(mockGetKueueAvailability).toHaveBeenCalledTimes(1);
   });
 
   it('treats a failed query as loaded and exposes the error', async () => {
-    const error = new Error('Kueue unavailable');
-    mockGetKueueAvailability.mockReturnValue(() => Promise.reject(error));
-    mockGetHardwareProfiles.mockReturnValue(() => Promise.resolve([]));
+    const error = new Error('HardwareProfiles unavailable');
+    mockGetHardwareProfiles.mockReturnValue(() => Promise.reject(error));
 
     const result = renderHook(() => useHardwareProfiles('test-ns'), {
       wrapper: createWrapper(makeQueryClient()),

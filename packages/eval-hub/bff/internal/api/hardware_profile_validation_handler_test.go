@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/opendatahub-io/eval-hub/bff/internal/integrations/evalhub"
@@ -59,5 +60,28 @@ func TestValidateProfileAgainstProviderReportsResourceMismatches(t *testing.T) {
 		if mismatch.ProviderID != "gpu-provider" || mismatch.Message == "" {
 			t.Fatalf("expected actionable provider mismatch, got %+v", mismatch)
 		}
+	}
+}
+
+func TestValidateProfileAgainstProviderRejectsInvalidProviderQuantity(t *testing.T) {
+	profile := models.HardwareProfile{
+		Name: "small",
+		Resources: []models.HardwareProfileResource{
+			{Identifier: "cpu", Default: "1"},
+		},
+	}
+	provider := evalhub.Provider{
+		Resource: evalhub.ProviderResource{ID: "provider-with-invalid-config"},
+		Runtime: &evalhub.ProviderRuntime{K8s: &evalhub.ProviderK8sRuntime{
+			CPURequest: "not-a-quantity",
+		}},
+	}
+
+	mismatches := validateProfileAgainstProvider(profile, provider)
+	if len(mismatches) != 1 {
+		t.Fatalf("expected one mismatch, got %d: %+v", len(mismatches), mismatches)
+	}
+	if !strings.Contains(mismatches[0].Message, "invalid cpu resource quantity") {
+		t.Fatalf("expected invalid quantity mismatch, got %+v", mismatches[0])
 	}
 }

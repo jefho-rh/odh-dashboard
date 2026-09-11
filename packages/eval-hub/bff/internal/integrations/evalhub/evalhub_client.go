@@ -85,19 +85,20 @@ type EvaluationJobsResponse struct {
 
 // EvaluationJob represents an evaluation job from eval-hub.
 type EvaluationJob struct {
-	Resource     JobResource      `json:"resource"`
-	Status       JobStatus        `json:"status"`
-	Results      JobResults       `json:"results"`
-	Name         string           `json:"name,omitempty"`
-	Description  string           `json:"description,omitempty"`
-	Tags         []string         `json:"tags,omitempty"`
-	Model        JobModel         `json:"model"`
-	PassCriteria *JobPassCriteria `json:"pass_criteria,omitempty"`
-	Benchmarks   []JobBenchmark   `json:"benchmarks,omitempty"`
-	Collection   *JobCollectionID `json:"collection,omitempty"`
-	Experiment   *JobExperiment   `json:"experiment,omitempty"`
-	Custom       map[string]any   `json:"custom,omitempty"`
-	Exports      *JobExports      `json:"exports,omitempty"`
+	Resource       JobResource      `json:"resource"`
+	Status         JobStatus        `json:"status"`
+	Results        JobResults       `json:"results"`
+	Name           string           `json:"name,omitempty"`
+	Description    string           `json:"description,omitempty"`
+	Tags           []string         `json:"tags,omitempty"`
+	Model          JobModel         `json:"model"`
+	PassCriteria   *JobPassCriteria `json:"pass_criteria,omitempty"`
+	Benchmarks     []JobBenchmark   `json:"benchmarks,omitempty"`
+	Collection     *JobCollectionID `json:"collection,omitempty"`
+	Experiment     *JobExperiment   `json:"experiment,omitempty"`
+	HardwareConfig *HardwareConfig  `json:"hardware_config,omitempty"`
+	Custom         map[string]any   `json:"custom,omitempty"`
+	Exports        *JobExports      `json:"exports,omitempty"`
 }
 
 type JobResource struct {
@@ -466,7 +467,7 @@ type CreateEvaluationJobRequest struct {
 	Exports        *JobExports      `json:"exports,omitempty"`
 	HardwareConfig *HardwareConfig  `json:"hardware_config,omitempty"`
 	// Queue is retained as a lowest-priority compatibility fallback. New callers should use HardwareConfig.Queue.
-	Queue string `json:"queue,omitempty"`
+	Queue *HardwareQueueConfig `json:"queue,omitempty"`
 }
 
 type JobCollectionID struct {

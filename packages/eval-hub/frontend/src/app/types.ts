@@ -296,6 +296,7 @@ export type EvaluationJob = {
   benchmarks?: JobBenchmark[] | null;
   collection?: JobCollection;
   experiment?: JobExperiment;
+  hardware_config?: HardwareConfig;
   custom?: Record<string, unknown>;
   exports?: JobExports;
 };
@@ -592,7 +593,7 @@ export type CreateEvaluationJobRequest = {
   exports?: JobExports;
   hardware_config?: HardwareConfig;
   /** Deprecated compatibility fallback. Prefer hardware_config.queue. */
-  queue?: string;
+  queue?: HardwareQueueConfig;
 };
 
 export type CreateEvaluationJobResponse = EvaluationJob;

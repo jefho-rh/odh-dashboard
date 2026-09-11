@@ -43,11 +43,19 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 	namespaceManaged := labels[kueueManagedLabel] == "true" || labels[legacyKueueManagedLabel] == "true"
 	clusterEnabled := false
 	dscList, err := client.Resource(dscGVR).List(ctx, metav1.ListOptions{})
-	if err == nil && len(dscList.Items) > 0 {
-		components, _, _ := unstructured.NestedMap(dscList.Items[0].Object, "spec", "components")
-		kueue, _, _ := unstructured.NestedMap(components, "kueue")
-		managementState, _, _ := unstructured.NestedString(kueue, "managementState")
-		clusterEnabled = managementState == "Managed"
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to list DataScienceClusters: %w", err)
+	}
+	if err == nil {
+		for _, dsc := range dscList.Items {
+			components, _, _ := unstructured.NestedMap(dsc.Object, "spec", "components")
+			kueue, _, _ := unstructured.NestedMap(components, "kueue")
+			managementState, _, _ := unstructured.NestedString(kueue, "managementState")
+			if managementState == "Managed" {
+				clusterEnabled = true
+				break
+			}
+		}
 	}
 	if !clusterEnabled || !namespaceManaged {
 		return &models.KueueAvailability{
@@ -88,7 +96,7 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 
 func dynamicFromConfig(config *rest.Config) (dynamic.Interface, error) {
 	if config == nil {
-		return nil, fmt.Errorf("Kubernetes REST config is unavailable")
+		return nil, fmt.Errorf("kubernetes REST config is unavailable")
 	}
 	return dynamic.NewForConfig(config)
 }

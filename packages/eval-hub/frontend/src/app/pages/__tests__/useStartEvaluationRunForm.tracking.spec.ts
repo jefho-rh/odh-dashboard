@@ -14,6 +14,8 @@ import {
 } from '~/app/pages/useStartEvaluationRunForm';
 
 const mockNavigate = jest.fn();
+let mockHardwareProfilesLoaded = true;
+let mockKueueAvailabilityLoaded = true;
 
 jest.mock('@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils', () => ({
   fireFormTrackingEvent: jest.fn(),
@@ -40,6 +42,22 @@ jest.mock('~/app/hooks/useConnectionValidation', () => ({
     connectionValidation: { status: 'idle' },
     setConnectionValidation: jest.fn(),
     handleVerifyConnection: jest.fn(),
+  }),
+}));
+
+jest.mock('~/app/hooks/useHardwareProfiles', () => ({
+  useHardwareProfiles: () => ({
+    profiles: [],
+    loaded: mockHardwareProfilesLoaded,
+    error: undefined,
+  }),
+}));
+
+jest.mock('~/app/hooks/useKueueAvailability', () => ({
+  useKueueAvailability: () => ({
+    availability: undefined,
+    loaded: mockKueueAvailabilityLoaded,
+    error: undefined,
   }),
 }));
 
@@ -83,6 +101,15 @@ const renderForm = (overrides = {}) =>
 describe('useStartEvaluationRunForm - Tracking Events', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHardwareProfilesLoaded = true;
+    mockKueueAvailabilityLoaded = true;
+  });
+
+  it('should remain invalid while hardware profile data is loading', () => {
+    mockHardwareProfilesLoaded = false;
+    const renderResult = renderForm();
+
+    expect(renderResult.result.current.isValid).toBe(false);
   });
 
   describe('Evaluations Run Source Selected', () => {

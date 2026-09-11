@@ -21,6 +21,14 @@ const profile: HardwareProfile = {
 };
 
 describe('HardwareProfileField', () => {
+  it('shows a field skeleton while Kueue and HardwareProfiles are loading', () => {
+    render(<HardwareProfileField profiles={[]} loaded={false} onSelect={jest.fn()} />);
+
+    expect(screen.getByTestId('hardware-profile-skeleton')).toBeInTheDocument();
+    expect(screen.getByText('Hardware profile')).toBeInTheDocument();
+    expect(screen.queryByTestId('hardware-profile-select')).not.toBeInTheDocument();
+  });
+
   it('renders queue-compatible profiles and reports the selection', () => {
     const onSelect = jest.fn();
     render(
@@ -67,6 +75,7 @@ describe('HardwareProfileField', () => {
       />,
     );
 
+    expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
     expect(screen.getByText(/No LocalQueues are configured/)).toBeInTheDocument();
   });
 
@@ -80,7 +89,21 @@ describe('HardwareProfileField', () => {
       />,
     );
 
-    expect(screen.queryByTestId('hardware-profile-select')).not.toBeInTheDocument();
+    expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
     expect(screen.getByText(/No compatible HardwareProfiles are configured/)).toBeInTheDocument();
+  });
+
+  it('shows an error when loading Kueue or HardwareProfiles fails', () => {
+    render(
+      <HardwareProfileField
+        profiles={[]}
+        loaded
+        error={new Error('Unable to load HardwareProfiles')}
+        onSelect={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
+    expect(screen.getByText('Unable to load HardwareProfiles')).toBeInTheDocument();
   });
 });

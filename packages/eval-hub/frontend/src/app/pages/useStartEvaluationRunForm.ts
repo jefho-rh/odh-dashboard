@@ -26,6 +26,7 @@ import { evaluationsBaseRoute } from '~/app/routes';
 import { useNotification } from '~/app/hooks/useNotification';
 import { useConnectionValidation } from '~/app/hooks/useConnectionValidation';
 import { useHardwareProfiles } from '~/app/hooks/useHardwareProfiles';
+import { useKueueAvailability } from '~/app/hooks/useKueueAvailability';
 import {
   startEvaluationRunDefaultValues,
   startEvaluationRunSchema,
@@ -107,8 +108,8 @@ const buildInitialFormValues = ({
   primaryMetric: initialValues?.primaryMetric ?? defaultPrimaryMetric,
   showAdditionalArgs: !!initialValues?.additionalArgs,
   additionalArgs: initialValues?.additionalArgs ?? '',
-  hardwareProfile: undefined,
-  queue: undefined,
+  hardwareProfile: initialValues?.hardwareProfile,
+  queue: initialValues?.queue,
 });
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -166,10 +167,16 @@ export function useStartEvaluationRunForm({
 
   const {
     availability: kueueAvailability,
+    loaded: kueueAvailabilityLoaded,
+    error: kueueAvailabilityError,
+  } = useKueueAvailability(namespace);
+  const {
     profiles: hardwareProfiles,
-    loaded: hardwareProfilesLoaded,
-    error: hardwareProfilesError,
+    loaded: hardwareProfilesQueryLoaded,
+    error: hardwareProfilesQueryError,
   } = useHardwareProfiles(namespace);
+  const hardwareProfilesLoaded = kueueAvailabilityLoaded && hardwareProfilesQueryLoaded;
+  const hardwareProfilesError = kueueAvailabilityError ?? hardwareProfilesQueryError;
 
   const [
     evaluationName,
@@ -444,6 +451,7 @@ export function useStartEvaluationRunForm({
 
   const isValid = React.useMemo(() => {
     if (
+      !hardwareProfilesLoaded ||
       evaluationName.trim() === '' ||
       !hasBenchmarks ||
       !hasExperiment ||
@@ -476,6 +484,7 @@ export function useStartEvaluationRunForm({
     datasetUrlError,
     sourceName,
     selectedInferenceServiceName,
+    hardwareProfilesLoaded,
     requiresHardwareProfile,
     hardwareProfile,
   ]);
