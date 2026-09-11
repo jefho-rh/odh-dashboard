@@ -46,6 +46,39 @@ export type EvalHubHealthResponse = {
   available: boolean;
 };
 
+export type KueueAvailability = {
+  enabled: boolean;
+  cluster_enabled: boolean;
+  namespace_managed: boolean;
+  local_queues_available: boolean;
+  local_queue_names: string[];
+};
+
+export type HardwareProfileResource = {
+  display_name?: string;
+  identifier: string;
+  resource_type?: string;
+  default?: string;
+  minimum?: string;
+  maximum?: string;
+};
+
+export type HardwareProfile = {
+  name: string;
+  display_name: string;
+  description?: string;
+  enabled: boolean;
+  scheduling_type?: string;
+  local_queue_name?: string;
+  priority_class?: string;
+  resources?: HardwareProfileResource[];
+};
+
+export type HardwareProfilesResponse = {
+  items: HardwareProfile[];
+  warning?: string;
+};
+
 // ---------------------------------------------------------------------------
 // EvalHub CR status types matching the BFF response shape
 // ---------------------------------------------------------------------------
@@ -102,12 +135,14 @@ type JobResource = {
   owner?: string;
   mlflow_experiment_id?: string;
   message?: JobMessage;
+  queue?: string;
 };
 
 type JobStatus = {
   state: EvaluationJobState;
   message?: JobMessage;
   benchmarks?: BenchmarkState[];
+  queue?: string;
 };
 
 type BenchmarkState = {
@@ -447,6 +482,10 @@ export type ProviderK8sRuntime = {
   memory_request?: string;
   cpu_limit?: string;
   memory_limit?: string;
+  gpu?: {
+    resource?: string;
+    count?: number;
+  };
   env?: ProviderEnvVar[];
 };
 
@@ -486,6 +525,25 @@ export type ProvidersResponse = {
   total_count?: number;
 };
 
+export type HardwareProfileValidationRequest = {
+  hardware_profile: string;
+  provider_ids: string[];
+};
+
+export type HardwareProfileResourceMismatch = {
+  provider_id: string;
+  resource: string;
+  required: string;
+  available: string;
+  message: string;
+};
+
+export type HardwareProfileValidationResponse = {
+  compatible: boolean;
+  hardware_profile: string;
+  mismatches?: HardwareProfileResourceMismatch[];
+};
+
 // ---------------------------------------------------------------------------
 // Create Evaluation Job request / response
 // ---------------------------------------------------------------------------
@@ -508,6 +566,8 @@ export type CreateEvaluationJobRequest = {
   experiment?: JobExperiment;
   custom?: Record<string, unknown>;
   exports?: JobExports;
+  hardware_profile?: string;
+  queue?: string;
 };
 
 export type CreateEvaluationJobResponse = EvaluationJob;

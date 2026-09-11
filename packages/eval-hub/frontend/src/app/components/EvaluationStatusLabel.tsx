@@ -19,9 +19,14 @@ type StatusConfig = {
   isFilled?: boolean;
 };
 
-const statusMap: Partial<Record<EvaluationJobState | 'not_started', StatusConfig>> = {
+const statusMap: Partial<Record<EvaluationJobState | 'not_started' | 'queued', StatusConfig>> = {
   pending: {
     label: 'Pending',
+    color: 'purple',
+    icon: <PendingIcon />,
+  },
+  queued: {
+    label: 'Queued',
     color: 'purple',
     icon: <PendingIcon />,
   },
@@ -75,6 +80,7 @@ const unknownStatusConfig: StatusConfig = {
 
 type EvaluationStatusLabelProps = {
   state: EvaluationJobState;
+  isQueued?: boolean;
   /** When true and state is 'failed', renders the "Not started" badge — no benchmark ever received a started_at timestamp. */
   isPreStartFailure?: boolean;
   onClick?: () => void;
@@ -82,6 +88,7 @@ type EvaluationStatusLabelProps = {
 
 const EvaluationStatusLabel: React.FC<EvaluationStatusLabelProps> = ({
   state,
+  isQueued,
   isPreStartFailure,
   onClick,
 }) => {
@@ -90,7 +97,9 @@ const EvaluationStatusLabel: React.FC<EvaluationStatusLabelProps> = ({
       ? 'not_started'
       : state === 'partially_failed'
         ? 'failed'
-        : state;
+        : state === 'pending' && isQueued
+          ? 'queued'
+          : state;
   const config = statusMap[effectiveState] ?? unknownStatusConfig;
 
   return (

@@ -100,6 +100,12 @@ describe('EvaluationStatusLabel', () => {
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  it('should render Queued for a pending job with a queue', () => {
+    render(<EvaluationStatusLabel state="pending" isQueued />);
+
+    expect(screen.getByTestId('status-label-pending')).toHaveTextContent('Queued');
+  });
 });
 
 describe('EvaluationStatusLabel partially_failed', () => {

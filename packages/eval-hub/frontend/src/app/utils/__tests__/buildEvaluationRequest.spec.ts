@@ -57,6 +57,18 @@ describe('buildEvaluationRequest', () => {
       });
       expect(result.name).toBe('My Eval');
     });
+
+    it('should include the selected hardware profile and queue', () => {
+      const result = buildEvaluationRequest({
+        ...baseParams,
+        benchmark: makeBenchmark(),
+        hardwareProfile: 'gpu-small',
+        queue: 'gpu-default',
+      });
+
+      expect(result.hardware_profile).toBe('gpu-small');
+      expect(result.queue).toBe('gpu-default');
+    });
   });
   describe('inference mode', () => {
     it('should use modelName and endpointUrl for the model field', () => {

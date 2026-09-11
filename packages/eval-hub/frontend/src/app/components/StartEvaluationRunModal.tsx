@@ -37,6 +37,7 @@ import LabelHelpPopover from '~/app/components/LabelHelpPopover';
 import SourceAgentFields from '~/app/components/SourceAgentFields';
 import SourceModelFields from '~/app/components/SourceModelFields';
 import SourcePrerecordedFields from '~/app/components/SourcePrerecordedFields';
+import HardwareProfileField from '~/app/components/HardwareProfileField';
 import { useInferenceServices } from '~/app/hooks/useInferenceServices';
 import {
   DEFAULT_EXPERIMENT_NAME,
@@ -555,6 +556,16 @@ const StartEvaluationRunModal: React.FC<StartEvaluationRunModalProps> = ({
                     </div>
                   ) : null}
                 </FormGroup>
+
+                <HardwareProfileField
+                  availability={form.kueueAvailability}
+                  profiles={form.hardwareProfiles}
+                  loaded={form.hardwareProfilesLoaded}
+                  error={form.hardwareProfilesError}
+                  selectedProfile={form.hardwareProfile}
+                  onSelect={(profile) => form.setHardwareProfile(profile?.name)}
+                  disabled={isCloning}
+                />
 
                 {!isCollectionFlow ? (
                   <BenchmarkThresholdField

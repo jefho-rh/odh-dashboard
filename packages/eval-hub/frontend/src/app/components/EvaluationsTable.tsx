@@ -28,6 +28,8 @@ import { EVAL_HUB_EVENTS } from '~/app/tracking/evalhubTrackingConstants';
 import {
   getEvaluationName,
   getBenchmarkName,
+  getEvaluationQueue,
+  isEvaluationJobQueued,
   isEvaluationJobComparable,
   isTerminalState,
 } from '~/app/utilities/evaluationUtils';
@@ -47,6 +49,7 @@ import usePageVisibility from '~/app/hooks/usePageVisibility';
 import EvaluationsTableRow from './EvaluationsTableRow';
 
 type FilterOption = 'name' | 'evaluation' | 'evaluated' | 'status';
+type StatusFilter = EvaluationJobState | 'queued';
 
 const FILTER_LABELS: Record<FilterOption, string> = {
   name: 'Evaluation name',
@@ -61,20 +64,24 @@ const FILTER_PLACEHOLDERS: Partial<Record<FilterOption, string>> = {
   evaluated: 'Filter by evaluated',
 };
 
-const STATUS_OPTIONS: { value: EvaluationJobState; label: string }[] = [
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'cancelled', label: 'Canceled' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
   { value: 'pending', label: 'Pending' },
+  { value: 'queued', label: 'Queued' },
   { value: 'running', label: 'Running' },
   { value: 'stopping', label: 'Canceling' },
 ];
 
-const matchesStatusFilter = (jobState: EvaluationJobState, selectedStatus: EvaluationJobState) => {
-  if (selectedStatus === 'failed') {
-    return jobState === 'failed' || jobState === 'partially_failed';
+const matchesStatusFilter = (job: EvaluationJob, selectedStatus: StatusFilter) => {
+  if (selectedStatus === 'queued') {
+    return isEvaluationJobQueued(job);
   }
-  return jobState === selectedStatus;
+  if (selectedStatus === 'failed') {
+    return job.status.state === 'failed' || job.status.state === 'partially_failed';
+  }
+  return job.status.state === selectedStatus;
 };
 
 type SortConfig = {
@@ -89,6 +96,7 @@ const getSortableValue = (job: EvaluationJob, columnIndex: number): string | num
     case 1:
       return job.status.state;
     case 4:
+    case 5:
       return job.resource.created_at ? new Date(job.resource.created_at).getTime() : 0;
     default:
       return '';
@@ -132,20 +140,42 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
   onShowStatus,
 }) => {
   const navigate = useNavigate();
+  const hasQueueAssignments = React.useMemo(
+    () => evaluations.some((job) => Boolean(getEvaluationQueue(job))),
+    [evaluations],
+  );
+  const dateColumnIndex = hasQueueAssignments ? 5 : 4;
+  const statusOptions = hasQueueAssignments
+    ? STATUS_OPTIONS
+    : STATUS_OPTIONS.filter((option) => option.value !== 'queued');
   // Pause polling when the browser tab is backgrounded to reduce server load
   const isPollingEnabled = usePageVisibility();
   const [activeFilter, setActiveFilter] = React.useState<FilterOption>('name');
   const [filterValue, setFilterValue] = React.useState('');
-  const [selectedStatus, setSelectedStatus] = React.useState<EvaluationJobState | ''>('');
+  const [selectedStatus, setSelectedStatus] = React.useState<StatusFilter | ''>('');
   const [isFilterSelectOpen, setIsFilterSelectOpen] = React.useState(false);
   const [isStatusSelectOpen, setIsStatusSelectOpen] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const [perPage, setPerPage] = React.useState(DEFAULT_TABLE_PER_PAGE);
   const [sortConfig, setSortConfig] = React.useState<SortConfig>({
-    index: 4,
+    index: 5,
     direction: 'desc',
   });
   const [selectedEvaluationIds, setSelectedEvaluationIds] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    setSortConfig((previous) => {
+      if (previous.index !== 4 && previous.index !== 5) {
+        return previous;
+      }
+      return previous.index === dateColumnIndex
+        ? previous
+        : { ...previous, index: dateColumnIndex };
+    });
+    if (!hasQueueAssignments && selectedStatus === 'queued') {
+      setSelectedStatus('');
+    }
+  }, [dateColumnIndex, hasQueueAssignments, selectedStatus]);
 
   const filteredEvaluations = React.useMemo(
     () =>
@@ -154,7 +184,7 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
           if (!selectedStatus) {
             return true;
           }
-          return matchesStatusFilter(job.status.state, selectedStatus);
+          return matchesStatusFilter(job, selectedStatus);
         }
         if (!filterValue) {
           return true;
@@ -429,7 +459,7 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
                     data-testid="filter-status-select"
                   >
                     <SelectList>
-                      {STATUS_OPTIONS.map((option) => (
+                      {statusOptions.map((option) => (
                         <SelectOption
                           key={option.value}
                           value={option.value}
@@ -534,6 +564,7 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
               <Th sort={getSortParams(1)} modifier="nowrap">
                 Status
               </Th>
+              {hasQueueAssignments && <Th modifier="nowrap">Queue</Th>}
               <Th
                 modifier="nowrap"
                 info={{
@@ -550,7 +581,7 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
               >
                 Evaluated
               </Th>
-              <Th sort={getSortParams(4)} modifier="nowrap">
+              <Th sort={getSortParams(dateColumnIndex)} modifier="nowrap">
                 Date
               </Th>
               <Th
@@ -578,6 +609,7 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
                 onShowStatus={onShowStatus}
                 isSelected={selectedEvaluationIds.has(job.resource.id)}
                 onSelectionChange={(checked) => handleSelectionChange(job.resource.id, checked)}
+                showQueue={hasQueueAssignments}
               />
             ))}
           </Tbody>

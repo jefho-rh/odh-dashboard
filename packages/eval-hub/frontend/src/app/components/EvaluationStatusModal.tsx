@@ -44,7 +44,9 @@ import {
   formatDate,
   formatDurationCompact,
   getBenchmarkName,
+  getEvaluationQueue,
   getEvaluationName,
+  isEvaluationJobQueued,
 } from '~/app/utilities/evaluationUtils';
 import { getMessageCodeLabel } from '~/app/utilities/messageCodeLabels';
 import { isPreStartFailure } from '~/app/utilities/evaluationJobPolling';
@@ -392,6 +394,9 @@ const EvaluationStatusModal: React.FC<EvaluationStatusModalProps> = ({
 
   // Prefer polled state so the badge updates on the 10s cycle rather than waiting for the 30s list refresh
   const state = polledJobData?.status.state ?? job?.status.state ?? 'pending';
+  const effectiveJob = polledJobData ?? job;
+  const queue = effectiveJob ? getEvaluationQueue(effectiveJob) : undefined;
+  const isQueued = effectiveJob ? isEvaluationJobQueued(effectiveJob) : false;
   const isInProgress = state === 'running' || state === 'pending' || state === 'stopping';
 
   const [now, setNow] = React.useState(() => new Date().toISOString());
@@ -429,7 +434,7 @@ const EvaluationStatusModal: React.FC<EvaluationStatusModalProps> = ({
     state === 'completed'
       ? `Evaluation completed successfully.${elapsed ? ` Total time: ${elapsed}` : ''}`
       : isInProgress
-        ? `Evaluation job is ${state === 'stopping' ? 'being canceled' : state === 'pending' ? 'pending' : 'running'}.${elapsed ? ` Elapsed time: ${elapsed}` : ''}`
+        ? `Evaluation job is ${state === 'stopping' ? 'being canceled' : isQueued ? 'queued and waiting for resource admission' : state === 'pending' ? 'pending' : 'running'}.${elapsed ? ` Elapsed time: ${elapsed}` : ''}`
         : elapsed
           ? `Elapsed time: ${elapsed}`
           : undefined;
@@ -457,7 +462,7 @@ const EvaluationStatusModal: React.FC<EvaluationStatusModalProps> = ({
               {evaluationName}
             </span>
           </Tooltip>
-          <EvaluationStatusLabel state={state} isPreStartFailure={isPreStart} />
+          <EvaluationStatusLabel state={state} isQueued={isQueued} isPreStartFailure={isPreStart} />
         </div>
       </ModalHeader>
       <ModalBody>
@@ -612,6 +617,18 @@ const EvaluationStatusModal: React.FC<EvaluationStatusModalProps> = ({
                         </DescriptionListDescription>
                       </DescriptionListGroup>
                     ) : null}
+                  </DescriptionList>
+                </StackItem>
+              ) : null}
+              {queue ? (
+                <StackItem>
+                  <DescriptionList isHorizontal isCompact>
+                    <DescriptionListGroup>
+                      <DescriptionListTerm>Queue</DescriptionListTerm>
+                      <DescriptionListDescription data-testid="evaluation-status-queue">
+                        {queue}
+                      </DescriptionListDescription>
+                    </DescriptionListGroup>
                   </DescriptionList>
                 </StackItem>
               ) : null}
