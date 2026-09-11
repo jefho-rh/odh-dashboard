@@ -1558,12 +1558,66 @@ components:
           additionalProperties: true
         exports:
           $ref: '#/components/schemas/JobExports'
-        hardware_profile:
-          type: string
-          description: Name of the HardwareProfile used to configure the workload
+        hardware_config:
+          $ref: '#/components/schemas/HardwareConfig'
         queue:
           type: string
-          description: LocalQueue selected through the HardwareProfile
+          deprecated: true
+          description: Deprecated lowest-priority queue fallback. Use hardware_config.queue instead.
+
+    HardwareConfig:
+      type: object
+      description: Hardware and scheduling configuration. HardwareProfile mode is mutually exclusive with direct resource and queue fields.
+      properties:
+        hardware_profile_name:
+          type: string
+          description: Name of the HardwareProfile CR to apply to the evaluation workload
+        cpu:
+          $ref: '#/components/schemas/HardwareResourceConfig'
+        memory:
+          $ref: '#/components/schemas/HardwareResourceConfig'
+        gpu:
+          $ref: '#/components/schemas/HardwareGPUConfig'
+        queue:
+          $ref: '#/components/schemas/HardwareQueueConfig'
+
+    HardwareResourceConfig:
+      type: object
+      properties:
+        request:
+          type: string
+          description: Kubernetes resource request quantity
+        limit:
+          type: string
+          description: Kubernetes resource limit quantity
+
+    HardwareGPUConfig:
+      type: object
+      required:
+        - name
+        - count
+      properties:
+        name:
+          type: string
+          description: Kubernetes extended resource name, such as nvidia.com/gpu
+        count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Number of GPUs requested
+
+    HardwareQueueConfig:
+      type: object
+      required:
+        - name
+      properties:
+        kind:
+          type: string
+          default: kueue
+          description: Queue implementation kind
+        name:
+          type: string
+          description: LocalQueue name used for Kueue scheduling
 
     # KUEUE SCHEMAS
     KueueAvailability:

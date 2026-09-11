@@ -669,6 +669,49 @@ func TestEvalHubClient_CreateEvaluationJob_WithCollectionBenchmarks(t *testing.T
 	assert.Equal(t, "arc_challenge", result.Collection.Benchmarks[0].ID)
 }
 
+func TestEvalHubClient_CreateEvaluationJob_WithHardwareConfig(t *testing.T) {
+	request := CreateEvaluationJobRequest{
+		Name: "Hardware profile evaluation",
+		Model: JobModel{
+			URL:  "http://model.example.test/v1",
+			Name: "test-model",
+		},
+		Benchmarks: []JobBenchmark{{
+			ID:         "arc_challenge",
+			ProviderID: "lm_evaluation_harness",
+		}},
+		HardwareConfig: &HardwareConfig{HardwareProfileName: "gpu-small"},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{
+			"name": "Hardware profile evaluation",
+			"model": {"url": "http://model.example.test/v1", "name": "test-model"},
+			"benchmarks": [{
+				"id": "arc_challenge",
+				"provider_id": "lm_evaluation_harness"
+			}],
+			"hardware_config": {"hardware_profile_name": "gpu-small"}
+		}`, string(body))
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(EvaluationJob{
+			Resource: JobResource{ID: "job-1"},
+			Status:   JobStatus{State: "pending"},
+			Results:  JobResults{},
+			Model:    request.Model,
+		})
+	}))
+	defer server.Close()
+
+	client := NewEvalHubClient(server.URL, "test-token", false, nil, "/api/v1")
+	_, err := client.CreateEvaluationJob(context.Background(), "my-ns", request)
+
+	require.NoError(t, err)
+}
+
 func TestEvalHubClient_GetEvaluationJobLogs_RejectsOversizedResponse(t *testing.T) {
 	const maxLogResponseSize = 10 * 1024 * 1024
 	oversizedBody := strings.Repeat("x", maxLogResponseSize+1)

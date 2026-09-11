@@ -216,6 +216,29 @@ type TestDataRef = {
   s3?: S3DataRef;
 };
 
+export type HardwareResourceConfig = {
+  request?: string;
+  limit?: string;
+};
+
+export type HardwareGPUConfig = {
+  name: string;
+  count: number;
+};
+
+export type HardwareQueueConfig = {
+  kind?: string;
+  name: string;
+};
+
+export type HardwareConfig = {
+  hardware_profile_name?: string;
+  cpu?: HardwareResourceConfig;
+  memory?: HardwareResourceConfig;
+  gpu?: HardwareGPUConfig;
+  queue?: HardwareQueueConfig;
+};
+
 type JobBenchmark = {
   id: string;
   provider_id?: string;
@@ -225,6 +248,7 @@ type JobBenchmark = {
   pass_criteria?: JobPassCriteria;
   parameters?: Record<string, unknown>;
   test_data_ref?: TestDataRef;
+  hardware_config?: HardwareConfig;
 };
 
 type JobCollection = {
@@ -566,7 +590,8 @@ export type CreateEvaluationJobRequest = {
   experiment?: JobExperiment;
   custom?: Record<string, unknown>;
   exports?: JobExports;
-  hardware_profile?: string;
+  hardware_config?: HardwareConfig;
+  /** Deprecated compatibility fallback. Prefer hardware_config.queue. */
   queue?: string;
 };
 

@@ -44,6 +44,7 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
     availability?.cluster_enabled &&
     availability.namespace_managed &&
     !availability.local_queues_available;
+  const hasNoProfiles = availability?.enabled === true && profiles.length === 0;
 
   if (!loaded) {
     return (
@@ -113,7 +114,9 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
             {error?.message ??
               (hasNoQueues
                 ? 'No LocalQueues are configured for this project. You can submit without a HardwareProfile.'
-                : 'Only queue-backed HardwareProfiles are shown for this project.')}
+                : hasNoProfiles
+                  ? 'No compatible HardwareProfiles are configured for this project. You can submit without selecting one.'
+                  : 'Only queue-backed HardwareProfiles are shown for this project.')}
           </HelperTextItem>
         </HelperText>
       </FormHelperText>

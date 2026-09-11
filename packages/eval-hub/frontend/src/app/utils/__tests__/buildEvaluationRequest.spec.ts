@@ -58,7 +58,7 @@ describe('buildEvaluationRequest', () => {
       expect(result.name).toBe('My Eval');
     });
 
-    it('should include the selected hardware profile and queue', () => {
+    it('should include the selected hardware profile using EvalHub hardware_config', () => {
       const result = buildEvaluationRequest({
         ...baseParams,
         benchmark: makeBenchmark(),
@@ -66,8 +66,22 @@ describe('buildEvaluationRequest', () => {
         queue: 'gpu-default',
       });
 
-      expect(result.hardware_profile).toBe('gpu-small');
-      expect(result.queue).toBe('gpu-default');
+      expect(result.hardware_config).toEqual({ hardware_profile_name: 'gpu-small' });
+      expect(result).not.toHaveProperty('hardware_profile');
+      expect(result).not.toHaveProperty('queue');
+    });
+
+    it('should use nested hardware_config.queue when only a queue is provided', () => {
+      const result = buildEvaluationRequest({
+        ...baseParams,
+        benchmark: makeBenchmark(),
+        queue: 'gpu-default',
+      });
+
+      expect(result.hardware_config).toEqual({
+        queue: { kind: 'kueue', name: 'gpu-default' },
+      });
+      expect(result).not.toHaveProperty('queue');
     });
   });
   describe('inference mode', () => {

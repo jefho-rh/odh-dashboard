@@ -69,4 +69,18 @@ describe('HardwareProfileField', () => {
 
     expect(screen.getByText(/No LocalQueues are configured/)).toBeInTheDocument();
   });
+
+  it('explains when Kueue is available but no compatible profiles are configured', () => {
+    render(
+      <HardwareProfileField
+        availability={availability}
+        profiles={[]}
+        loaded
+        onSelect={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('hardware-profile-select')).not.toBeInTheDocument();
+    expect(screen.getByText(/No compatible HardwareProfiles are configured/)).toBeInTheDocument();
+  });
 });

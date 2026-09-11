@@ -202,14 +202,40 @@ type TestDataRef struct {
 	S3 *S3DataRef `json:"s3,omitempty"`
 }
 
+// HardwareConfig describes the resource and scheduling configuration for an evaluation job.
+// HardwareProfileName is mutually exclusive with the direct resource and queue fields.
+type HardwareConfig struct {
+	HardwareProfileName string                  `json:"hardware_profile_name,omitempty"`
+	CPU                 *HardwareResourceConfig `json:"cpu,omitempty"`
+	Memory              *HardwareResourceConfig `json:"memory,omitempty"`
+	GPU                 *HardwareGPUConfig      `json:"gpu,omitempty"`
+	Queue               *HardwareQueueConfig    `json:"queue,omitempty"`
+}
+
+type HardwareResourceConfig struct {
+	Request string `json:"request,omitempty"`
+	Limit   string `json:"limit,omitempty"`
+}
+
+type HardwareGPUConfig struct {
+	Name  string `json:"name,omitempty"`
+	Count int64  `json:"count,omitempty"`
+}
+
+type HardwareQueueConfig struct {
+	Kind string `json:"kind,omitempty"`
+	Name string `json:"name"`
+}
+
 type JobBenchmark struct {
-	ID           string           `json:"id"`
-	ProviderID   string           `json:"provider_id,omitempty"`
-	Weight       float64          `json:"weight,omitempty"`
-	PrimaryScore *JobPrimaryScore `json:"primary_score,omitempty"`
-	PassCriteria *JobPassCriteria `json:"pass_criteria,omitempty"`
-	Parameters   map[string]any   `json:"parameters,omitempty"`
-	TestDataRef  *TestDataRef     `json:"test_data_ref,omitempty"`
+	ID             string           `json:"id"`
+	ProviderID     string           `json:"provider_id,omitempty"`
+	Weight         float64          `json:"weight,omitempty"`
+	PrimaryScore   *JobPrimaryScore `json:"primary_score,omitempty"`
+	PassCriteria   *JobPassCriteria `json:"pass_criteria,omitempty"`
+	Parameters     map[string]any   `json:"parameters,omitempty"`
+	TestDataRef    *TestDataRef     `json:"test_data_ref,omitempty"`
+	HardwareConfig *HardwareConfig  `json:"hardware_config,omitempty"`
 }
 
 // CollectionsResponse is the paginated response from the EvalHub API.
@@ -428,18 +454,19 @@ type CreateCollectionRequest struct {
 
 // CreateEvaluationJobRequest is the payload sent to the EvalHub API to start a new evaluation run.
 type CreateEvaluationJobRequest struct {
-	Name            string           `json:"name"`
-	Description     string           `json:"description,omitempty"`
-	Tags            []string         `json:"tags,omitempty"`
-	Model           JobModel         `json:"model"`
-	PassCriteria    *JobPassCriteria `json:"pass_criteria,omitempty"`
-	Benchmarks      []JobBenchmark   `json:"benchmarks,omitempty"`
-	Collection      *JobCollectionID `json:"collection,omitempty"`
-	Experiment      *JobExperiment   `json:"experiment,omitempty"`
-	Custom          map[string]any   `json:"custom,omitempty"`
-	Exports         *JobExports      `json:"exports,omitempty"`
-	HardwareProfile string           `json:"hardware_profile,omitempty"`
-	Queue           string           `json:"queue,omitempty"`
+	Name           string           `json:"name"`
+	Description    string           `json:"description,omitempty"`
+	Tags           []string         `json:"tags,omitempty"`
+	Model          JobModel         `json:"model"`
+	PassCriteria   *JobPassCriteria `json:"pass_criteria,omitempty"`
+	Benchmarks     []JobBenchmark   `json:"benchmarks,omitempty"`
+	Collection     *JobCollectionID `json:"collection,omitempty"`
+	Experiment     *JobExperiment   `json:"experiment,omitempty"`
+	Custom         map[string]any   `json:"custom,omitempty"`
+	Exports        *JobExports      `json:"exports,omitempty"`
+	HardwareConfig *HardwareConfig  `json:"hardware_config,omitempty"`
+	// Queue is retained as a lowest-priority compatibility fallback. New callers should use HardwareConfig.Queue.
+	Queue string `json:"queue,omitempty"`
 }
 
 type JobCollectionID struct {

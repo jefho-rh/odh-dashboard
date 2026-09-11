@@ -1,5 +1,4 @@
-import React from 'react';
-import { FetchStateCallbackPromise, NotReadyError, useFetchState } from 'mod-arch-core';
+import { useQuery } from '@tanstack/react-query';
 import { getHardwareProfiles, getKueueAvailability } from '~/app/api/k8s';
 import type { HardwareProfile, KueueAvailability } from '~/app/types';
 
@@ -11,38 +10,25 @@ type UseHardwareProfilesResult = {
 };
 
 export const useHardwareProfiles = (namespace: string | undefined): UseHardwareProfilesResult => {
-  const callback = React.useCallback<
-    FetchStateCallbackPromise<{ availability: KueueAvailability; profiles: HardwareProfile[] }>
-  >(
-    async (opts) => {
+  const query = useQuery({
+    queryKey: ['evalHubHardwareProfiles', namespace],
+    enabled: Boolean(namespace),
+    queryFn: async ({ signal }) => {
       if (!namespace) {
-        throw new NotReadyError('Namespace is required to load HardwareProfiles');
+        throw new Error('Namespace is required to load HardwareProfiles');
       }
       const [availability, profiles] = await Promise.all([
-        getKueueAvailability('', namespace)(opts),
-        getHardwareProfiles('', namespace)(opts),
+        getKueueAvailability('', namespace)({ signal }),
+        getHardwareProfiles('', namespace)({ signal }),
       ]);
       return { availability, profiles };
     },
-    [namespace],
-  );
-
-  const [data, loaded, error] = useFetchState<{
-    availability: KueueAvailability | undefined;
-    profiles: HardwareProfile[];
-  }>(
-    callback,
-    {
-      availability: undefined,
-      profiles: [],
-    },
-    { initialPromisePurity: true },
-  );
+  });
 
   return {
-    availability: data.availability,
-    profiles: data.profiles,
-    loaded,
-    error,
+    availability: query.data?.availability,
+    profiles: query.data?.profiles ?? [],
+    loaded: query.isSuccess || query.isError,
+    error: query.error ?? undefined,
   };
 };

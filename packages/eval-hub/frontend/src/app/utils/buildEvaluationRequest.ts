@@ -116,6 +116,14 @@ const buildEvaluationRequest = ({
   );
 
   const isCollectionFlow = !!collection;
+  const hardwareConfig = hardwareProfile
+    ? {
+        // eslint-disable-next-line camelcase
+        hardware_profile_name: hardwareProfile,
+      }
+    : queue
+      ? { queue: { kind: 'kueue', name: queue } }
+      : undefined;
 
   return {
     name: evaluationName.trim(),
@@ -149,8 +157,7 @@ const buildEvaluationRequest = ({
     ...restOverrides,
     ...(experiment ? { experiment } : {}),
     // eslint-disable-next-line camelcase
-    ...(hardwareProfile ? { hardware_profile: hardwareProfile } : {}),
-    ...(queue ? { queue } : {}),
+    ...(hardwareConfig ? { hardware_config: hardwareConfig } : {}),
   };
 };
 
