@@ -62,6 +62,22 @@ jest.mock('~/app/hooks/useConnectionValidation', () => ({
   }),
 }));
 
+jest.mock('~/app/hooks/useHardwareProfiles', () => ({
+  useHardwareProfiles: () => ({
+    profiles: [],
+    loaded: true,
+    error: undefined,
+  }),
+}));
+
+jest.mock('~/app/hooks/useKueueAvailability', () => ({
+  useKueueAvailability: () => ({
+    availability: undefined,
+    loaded: true,
+    error: undefined,
+  }),
+}));
+
 jest.mock('~/app/hooks/useInferenceServices', () => ({
   useInferenceServices: () => ({
     inferenceServices: [

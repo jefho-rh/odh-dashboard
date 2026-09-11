@@ -9,9 +9,11 @@ import {
   formatDate,
   getAllBenchmarkNames,
   getBenchmarkName,
+  getEvaluationQueue,
   getEvaluationName,
   getFailedBenchmarkCount,
   getResultScore,
+  isEvaluationJobQueued,
   isEvaluationJobComparable,
 } from '~/app/utilities/evaluationUtils';
 import { isPreStartFailure } from '~/app/utilities/evaluationJobPolling';
@@ -33,6 +35,7 @@ type EvaluationsTableRowProps = {
   onShowStatus: (job: EvaluationJob) => void;
   isSelected: boolean;
   onSelectionChange: (checked: boolean) => void;
+  showQueue?: boolean;
 };
 
 const IN_PROGRESS_STATES = new Set(['running', 'pending', 'stopping']);
@@ -47,6 +50,7 @@ const EvaluationsTableRow: React.FC<EvaluationsTableRowProps> = ({
   onShowStatus,
   isSelected,
   onSelectionChange,
+  showQueue = true,
 }) => {
   const navigate = useNavigate();
   const [showStopModal, setShowStopModal] = React.useState(false);
@@ -67,6 +71,8 @@ const EvaluationsTableRow: React.FC<EvaluationsTableRowProps> = ({
   const displayState = isStopping ? 'stopping' : currentState;
   const isPreStart = isPreStartFailure(polledJobData ?? job);
   const effectiveBenchmarks = polledJobData?.status.benchmarks ?? job.status.benchmarks ?? [];
+  const effectiveJob = polledJobData ?? job;
+  const queue = getEvaluationQueue(effectiveJob);
 
   React.useEffect(() => {
     if (!isInProgress) {
@@ -218,6 +224,7 @@ const EvaluationsTableRow: React.FC<EvaluationsTableRowProps> = ({
         <Td dataLabel="Status" data-testid="evaluation-status">
           <EvaluationStatusLabel
             state={displayState}
+            isQueued={isEvaluationJobQueued(effectiveJob)}
             isPreStartFailure={isPreStart}
             onClick={() => onShowStatus(job)}
           />
@@ -229,6 +236,11 @@ const EvaluationsTableRow: React.FC<EvaluationsTableRowProps> = ({
             </div>
           ) : null}
         </Td>
+        {showQueue && (
+          <Td dataLabel="Queue" data-testid="evaluation-queue">
+            {queue ?? '-'}
+          </Td>
+        )}
         <Td dataLabel="Evaluation" data-testid="evaluation-benchmark">
           <Tooltip
             content={

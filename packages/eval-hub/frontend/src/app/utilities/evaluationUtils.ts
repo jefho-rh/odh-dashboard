@@ -4,6 +4,12 @@ import { CollectionNameMap } from '~/app/hooks/useCollectionNameMap';
 export const getEvaluationName = (job: EvaluationJob): string =>
   job.name || job.resource.tenant || job.resource.id;
 
+export const getEvaluationQueue = (job: EvaluationJob): string | undefined =>
+  job.status.queue || job.resource.queue;
+
+export const isEvaluationJobQueued = (job: EvaluationJob): boolean =>
+  job.status.state === 'pending' && Boolean(getEvaluationQueue(job));
+
 export const getJobBenchmarks = (job: EvaluationJob): NonNullable<EvaluationJob['benchmarks']> => {
   if (job.benchmarks?.length) {
     return job.benchmarks;

@@ -34,4 +34,8 @@ type KubernetesClientInterface interface {
 	// GetEvalHubCRStatus lists EvalHub CRs in the namespace and returns the full status
 	// of the first found instance, including phase, readiness, conditions, and providers.
 	GetEvalHubCRStatus(ctx context.Context, identity *RequestIdentity, namespace string) (*models.EvalHubCRStatus, error)
+
+	// Kueue and HardwareProfile discovery
+	GetKueueAvailability(ctx context.Context, identity *RequestIdentity, namespace string) (*models.KueueAvailability, error)
+	ListHardwareProfiles(ctx context.Context, identity *RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error)
 }

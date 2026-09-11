@@ -216,6 +216,30 @@ func (kc *InternalKubernetesClient) GetUser(identity *RequestIdentity) (string, 
 	return identity.UserID, nil
 }
 
+func (kc *InternalKubernetesClient) GetKueueAvailability(ctx context.Context, _ *RequestIdentity, namespace string) (*models.KueueAvailability, error) {
+	config, err := helper.GetKubeconfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubeconfig for Kueue lookup: %w", err)
+	}
+	dynamicClient, err := dynamicFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client for Kueue lookup: %w", err)
+	}
+	return getKueueAvailability(ctx, dynamicClient, namespace)
+}
+
+func (kc *InternalKubernetesClient) ListHardwareProfiles(ctx context.Context, _ *RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error) {
+	config, err := helper.GetKubeconfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubeconfig for HardwareProfile lookup: %w", err)
+	}
+	dynamicClient, err := dynamicFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client for HardwareProfile lookup: %w", err)
+	}
+	return listHardwareProfiles(ctx, dynamicClient, namespace)
+}
+
 // CanListEvalHubInstances performs a SubjectAccessReview on behalf of the identified user
 // to check whether they have permission to access EvalHub evaluations in the given namespace.
 // Checks the virtual "evaluations" resource provisioned by the TrustyAI operator per-tenant

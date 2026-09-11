@@ -8,7 +8,7 @@ import {
 } from '@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils';
 import { TrackingOutcome } from '@odh-dashboard/ui-core';
 import type { MlflowExperiment } from '@odh-dashboard/internal/concepts/mlflow';
-import { createEvaluationJob } from '~/app/api/k8s';
+import { createEvaluationJob, validateHardwareProfile } from '~/app/api/k8s';
 import {
   EVAL_HUB_EVENTS,
   type RunSourceSelectedProperties,
@@ -25,6 +25,8 @@ import { normalizeThreshold } from '~/app/utilities/evaluationUtils';
 import { evaluationsBaseRoute } from '~/app/routes';
 import { useNotification } from '~/app/hooks/useNotification';
 import { useConnectionValidation } from '~/app/hooks/useConnectionValidation';
+import { useHardwareProfiles } from '~/app/hooks/useHardwareProfiles';
+import { useKueueAvailability } from '~/app/hooks/useKueueAvailability';
 import {
   startEvaluationRunDefaultValues,
   startEvaluationRunSchema,
@@ -106,6 +108,8 @@ const buildInitialFormValues = ({
   primaryMetric: initialValues?.primaryMetric ?? defaultPrimaryMetric,
   showAdditionalArgs: !!initialValues?.additionalArgs,
   additionalArgs: initialValues?.additionalArgs ?? '',
+  hardwareProfile: initialValues?.hardwareProfile,
+  queue: initialValues?.queue,
 });
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -161,6 +165,19 @@ export function useStartEvaluationRunForm({
     }),
   });
 
+  const {
+    availability: kueueAvailability,
+    loaded: kueueAvailabilityLoaded,
+    error: kueueAvailabilityError,
+  } = useKueueAvailability(namespace);
+  const {
+    profiles: hardwareProfiles,
+    loaded: hardwareProfilesQueryLoaded,
+    error: hardwareProfilesQueryError,
+  } = useHardwareProfiles(namespace);
+  const hardwareProfilesLoaded = kueueAvailabilityLoaded && hardwareProfilesQueryLoaded;
+  const hardwareProfilesError = kueueAvailabilityError ?? hardwareProfilesQueryError;
+
   const [
     evaluationName,
     sourceMode,
@@ -180,6 +197,7 @@ export function useStartEvaluationRunForm({
     primaryMetric,
     showAdditionalArgs,
     additionalArgs,
+    hardwareProfile,
   ] = useWatch({
     control: form.control,
     name: [
@@ -201,6 +219,7 @@ export function useStartEvaluationRunForm({
       'primaryMetric',
       'showAdditionalArgs',
       'additionalArgs',
+      'hardwareProfile',
     ],
   });
 
@@ -427,8 +446,17 @@ export function useStartEvaluationRunForm({
     (experimentMode === 'existing' && !!selectedExperimentName?.trim()) ||
     (experimentMode === 'new' && newExperimentName.trim() !== '');
 
+  const requiresHardwareProfile =
+    hardwareProfilesLoaded && kueueAvailability?.enabled === true && hardwareProfiles.length > 0;
+
   const isValid = React.useMemo(() => {
-    if (evaluationName.trim() === '' || !hasBenchmarks || !hasExperiment) {
+    if (
+      !hardwareProfilesLoaded ||
+      evaluationName.trim() === '' ||
+      !hasBenchmarks ||
+      !hasExperiment ||
+      (requiresHardwareProfile && !hardwareProfile)
+    ) {
       return false;
     }
 
@@ -456,6 +484,9 @@ export function useStartEvaluationRunForm({
     datasetUrlError,
     sourceName,
     selectedInferenceServiceName,
+    hardwareProfilesLoaded,
+    requiresHardwareProfile,
+    hardwareProfile,
   ]);
 
   const canVerifyConnection = React.useMemo(() => {
@@ -516,6 +547,15 @@ export function useStartEvaluationRunForm({
   const setShowAdditionalArgs = React.useCallback(
     (checked: boolean) => form.setValue('showAdditionalArgs', checked, { shouldValidate: true }),
     [form],
+  );
+
+  const setHardwareProfile = React.useCallback(
+    (profileName: string | undefined) => {
+      const profile = hardwareProfiles.find((candidate) => candidate.name === profileName);
+      form.setValue('hardwareProfile', profile?.name, { shouldValidate: true });
+      form.setValue('queue', profile?.local_queue_name, { shouldValidate: true });
+    },
+    [form, hardwareProfiles],
   );
 
   const handleAdditionalArgsFileChange = React.useCallback(
@@ -693,7 +733,18 @@ export function useStartEvaluationRunForm({
       experimentTags: undefined,
       passCriteriaOverride,
       primaryScoreOverride,
+      hardwareProfile: values.hardwareProfile,
+      queue: values.queue,
     });
+
+    const providerIds = Array.from(
+      new Set(
+        [
+          benchmark?.providerId,
+          ...(activeCollection?.benchmarks ?? []).map((item) => item.provider_id),
+        ].filter((providerId): providerId is string => Boolean(providerId?.trim())),
+      ),
+    );
 
     fireMiscTrackingEvent(EVAL_HUB_EVENTS.MLFLOW_EXPERIMENT_SELECTED, {
       experimentSelection: isNewExperiment
@@ -743,6 +794,24 @@ export function useStartEvaluationRunForm({
     abortControllerRef.current = controller;
 
     try {
+      if (values.hardwareProfile) {
+        const validation = await validateHardwareProfile('', namespace ?? '', {
+          // eslint-disable-next-line camelcase
+          hardware_profile: values.hardwareProfile,
+          // eslint-disable-next-line camelcase
+          provider_ids: providerIds,
+        })({ signal: controller.signal });
+        if (!validation.compatible) {
+          const details = (validation.mismatches ?? [])
+            .map((mismatch) => mismatch.message)
+            .join(' ');
+          notification.error(
+            'Hardware profile is not compatible',
+            details || 'Choose a larger hardware profile before starting this evaluation.',
+          );
+          return;
+        }
+      }
       await createEvaluationJob('', namespace ?? '', request)({ signal: controller.signal });
       if (controller.signal.aborted) {
         return;
@@ -837,6 +906,13 @@ export function useStartEvaluationRunForm({
     handleVerifyConnection,
     canVerifyConnection,
     requiresConnectionValidation,
+    hardwareProfiles,
+    hardwareProfilesLoaded,
+    hardwareProfilesError,
+    kueueAvailability,
+    hardwareProfile,
+    setHardwareProfile,
+    requiresHardwareProfile,
   };
 }
 
