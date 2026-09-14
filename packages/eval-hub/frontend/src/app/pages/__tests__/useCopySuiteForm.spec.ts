@@ -1,6 +1,6 @@
 /* eslint-disable camelcase */
 import { act, waitFor } from '@testing-library/react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { fireMiscTrackingEvent } from '@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils';
 import { renderHook } from '~/__tests__/unit/testUtils/hooks';
 import { cloneCollection, createCollection } from '~/app/api/k8s';
@@ -18,7 +18,7 @@ jest.mock('@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils', (
   fireMiscTrackingEvent: jest.fn(),
 }));
 
-jest.mock('react-router', () => ({
+jest.mock('react-router-dom', () => ({
   useNavigate: jest.fn(),
 }));
 
@@ -40,10 +40,10 @@ const mockNotification = {
   remove: jest.fn(),
 };
 
-const mockUseNavigate = jest.mocked(useNavigate);
 const mockCloneCollection = jest.mocked(cloneCollection);
 const mockCreateCollection = jest.mocked(createCollection);
 const mockUseNotification = jest.mocked(useNotification);
+const mockUseNavigate = jest.mocked(useNavigate);
 const mockFireMiscTrackingEvent = jest.mocked(fireMiscTrackingEvent);
 const defaultSuiteNamePattern =
   /^Curated suite - [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} (AM|PM)$/;
@@ -127,8 +127,8 @@ const createDeferred = <T>() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUseNavigate.mockReturnValue(mockNavigate);
   mockUseNotification.mockReturnValue(mockNotification);
+  mockUseNavigate.mockReturnValue(mockNavigate);
 });
 
 describe('createBenchmarkFromKey', () => {
@@ -204,6 +204,11 @@ describe('useCopySuiteForm', () => {
   });
 
   it('should fall back to another provider when the matching provider lacks the benchmark', async () => {
+    const cloneFetcher = jest.fn().mockResolvedValue({
+      resource: { id: 'saved-collection' },
+      name: 'Saved suite',
+    } as Collection);
+    mockCloneCollection.mockReturnValue(cloneFetcher);
     const result = renderForm({
       sourceCollection: {
         ...sourceCollection,
@@ -223,8 +228,27 @@ describe('useCopySuiteForm', () => {
     expect(result.result.current.benchmarks[0]).toEqual(
       expect.objectContaining({
         id: 'benchmark-two',
+        providerId: 'provider-two',
         name: 'Benchmark Two',
         availableMetrics: ['accuracy'],
+      }),
+    );
+
+    await act(async () => {
+      await result.result.current.handleSaveOnly();
+    });
+
+    expect(mockCloneCollection).toHaveBeenCalledWith(
+      '',
+      'test-namespace',
+      'source-collection',
+      expect.objectContaining({
+        benchmarks: [
+          expect.objectContaining({
+            id: 'benchmark-two',
+            provider_id: 'provider-two',
+          }),
+        ],
       }),
     );
   });
@@ -932,6 +956,7 @@ describe('useCopySuiteForm', () => {
     const onSaveAndRunRequest = jest.fn();
     const result = renderForm({ onSaveAndRunRequest });
     await waitFor(() => expect(result.result.current.suiteName).toMatch(defaultSuiteNamePattern));
+    await waitFor(() => expect(result.result.current.isValid).toBe(true));
 
     act(() => {
       result.result.current.handleSaveAndRun();

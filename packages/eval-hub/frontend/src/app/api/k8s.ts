@@ -95,6 +95,21 @@ const sanitizeStringArray = (value: unknown): string[] | undefined =>
 const sanitizeOptionalString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
 
+const sanitizeCollection = (c: Collection): Collection => ({
+  ...c,
+  category: sanitizeOptionalString(c.category),
+  tags: sanitizeStringArray(c.tags),
+  domains: sanitizeStringArray(c.domains),
+  tasks: sanitizeStringArray(c.tasks),
+  modalities: sanitizeStringArray(c.modalities),
+  industries: sanitizeStringArray(c.industries),
+  // eslint-disable-next-line camelcase
+  ai_entities: sanitizeStringArray(c.ai_entities),
+  benchmarks: Array.isArray(c.benchmarks)
+    ? c.benchmarks.filter(isValidCollectionBenchmark)
+    : undefined,
+});
+
 const isValidProviderItem = (p: unknown): p is Provider =>
   p != null &&
   typeof p === 'object' &&
@@ -137,20 +152,7 @@ const sanitizeProviders = (items: unknown[]): Provider[] =>
   }));
 
 const sanitizeCollectionItems = (items: unknown[]): Collection[] =>
-  items.filter(isValidCollectionItem).map((c) => ({
-    ...c,
-    category: sanitizeOptionalString(c.category),
-    tags: sanitizeStringArray(c.tags),
-    domains: sanitizeStringArray(c.domains),
-    tasks: sanitizeStringArray(c.tasks),
-    modalities: sanitizeStringArray(c.modalities),
-    industries: sanitizeStringArray(c.industries),
-    // eslint-disable-next-line camelcase
-    ai_entities: sanitizeStringArray(c.ai_entities),
-    benchmarks: Array.isArray(c.benchmarks)
-      ? c.benchmarks.filter(isValidCollectionBenchmark)
-      : undefined,
-  }));
+  items.filter(isValidCollectionItem).map(sanitizeCollection);
 
 export const getUser =
   (hostPath: string) =>
@@ -354,7 +356,7 @@ export const getCollection =
     ).then((response) => {
       if (isModArchResponse<Collection>(response)) {
         validateCollection(response.data);
-        return response.data;
+        return sanitizeCollection(response.data);
       }
       throw new Error('Invalid response format');
     });
@@ -459,9 +461,7 @@ export const getCollections =
     ).then((response) => {
       if (
         isModArchResponse<
-          | { items?: Collection[] | null; total_count?: number; limit?: number }
-          | Collection[]
-          | null
+          { items?: unknown; total_count?: number; limit?: number } | Collection[] | null
         >(response)
       ) {
         const { data } = response;
@@ -471,8 +471,12 @@ export const getCollections =
         if (Array.isArray(data)) {
           return { items: sanitizeCollectionItems(data) };
         }
+        const items = data.items ?? [];
+        if (!Array.isArray(items)) {
+          throw new Error('Invalid response format');
+        }
         return {
-          items: sanitizeCollectionItems(data.items ?? []),
+          items: sanitizeCollectionItems(items),
           // eslint-disable-next-line camelcase
           total_count: data.total_count,
           limit: data.limit,

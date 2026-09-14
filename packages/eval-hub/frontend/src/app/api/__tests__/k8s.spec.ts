@@ -261,6 +261,27 @@ describe('getCollection', () => {
     );
   });
 
+  it('should sanitize malformed collection string arrays', async () => {
+    mockRestGET.mockResolvedValue({
+      data: {
+        name: 'Test',
+        resource: { id: 'col-1' },
+        domains: ['safety', 123],
+        ai_entities: 'model',
+        industries: [null, 'healthcare'],
+      },
+    });
+    mockIsModArchResponse.mockReturnValue(true);
+
+    const result = await getCollection('', 'test-ns', 'col-1')({});
+
+    expect(result).toMatchObject({
+      domains: ['safety'],
+      ai_entities: undefined,
+      industries: ['healthcare'],
+    });
+  });
+
   it('should reject with an error when collectionId is empty', async () => {
     await expect(getCollection('', 'test-ns', '')({})).rejects.toThrow(
       'collectionId must not be empty',
@@ -554,6 +575,27 @@ describe('getCollections', () => {
 
     expect(result).toEqual({ items: [] });
   });
+
+  it('should return empty items when items is missing', async () => {
+    mockRestGET.mockResolvedValue({ data: {} });
+    mockIsModArchResponse.mockReturnValue(true);
+
+    const result = await getCollections('', { namespace: 'test-ns' })({});
+
+    expect(result).toEqual({ items: [] });
+  });
+
+  it.each([{}, 'not-an-array', 123, false])(
+    'should reject non-array items value %p',
+    async (items) => {
+      mockRestGET.mockResolvedValue({ data: { items } });
+      mockIsModArchResponse.mockReturnValue(true);
+
+      await expect(getCollections('', { namespace: 'test-ns' })({})).rejects.toThrow(
+        'Invalid response format',
+      );
+    },
+  );
 
   it('should sanitize malformed collection string arrays', async () => {
     const items = [

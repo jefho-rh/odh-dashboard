@@ -14,7 +14,7 @@ import {
   Spinner,
 } from '@patternfly/react-core';
 import { ExclamationCircleIcon } from '@patternfly/react-icons';
-import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useFetchState, FetchStateCallbackPromise, NotReadyError } from 'mod-arch-core';
 import { ApplicationsPage } from '@odh-dashboard/ui-core';
 import { getCollection } from '~/app/api/k8s';
@@ -192,11 +192,16 @@ const SuiteEditorPage: React.FC<SuiteEditorPageProps> = ({ mode }) => {
 
   if (curatedSuitePage && sourceAiEntity) {
     breadcrumbItems.push(
-      <BreadcrumbItem key="curatedSuites">
-        <Link to={evaluationCuratedBenchmarkSuitesRoute(namespace, sourceAiEntity)}>
-          {curatedSuitePage.title}
-        </Link>
-      </BreadcrumbItem>,
+      <BreadcrumbItem
+        key="curatedSuites"
+        render={() =>
+          renderBreadcrumbLink(
+            evaluationCuratedBenchmarkSuitesRoute(namespace, sourceAiEntity),
+            curatedSuitePage.title,
+            'copy-suite-breadcrumb-curated-suites',
+          )
+        }
+      />,
     );
   }
 
