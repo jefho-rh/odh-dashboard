@@ -606,7 +606,7 @@ describe('Start Evaluation Run - Kueue Hardware Profiles', () => {
     startEvaluationRunPage.findSubmitButton().click();
 
     cy.wait('@validateDeletedQueue');
-    new ToastNotification('Invalid request').find().should('exist');
+    new ToastNotification('Failed to start evaluation').find().should('exist');
     startEvaluationRunPage.findSubmitButton().should('be.enabled');
   });
 });
