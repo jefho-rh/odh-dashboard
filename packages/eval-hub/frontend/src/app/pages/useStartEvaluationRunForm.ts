@@ -46,6 +46,7 @@ type UseStartEvaluationRunFormParams = {
   benchmark: FlatBenchmark | undefined;
   collection: Collection | undefined;
   isCollectionFlow: boolean;
+  allowDeferredCollection?: boolean;
   experiments: MlflowExperiment[];
   experimentsLoaded: boolean;
   initialValues?: ReconfigureFormData;
@@ -118,6 +119,7 @@ export function useStartEvaluationRunForm({
   benchmark,
   collection,
   isCollectionFlow,
+  allowDeferredCollection = false,
   experiments,
   experimentsLoaded,
   initialValues,
@@ -414,7 +416,9 @@ export function useStartEvaluationRunForm({
   benchmarkDisplayNameRef.current = benchmarkDisplayName;
 
   const hasBenchmarks =
-    !!benchmark || (!!collection && !!collection.benchmarks && collection.benchmarks.length > 0);
+    allowDeferredCollection ||
+    !!benchmark ||
+    (!!collection && !!collection.benchmarks && collection.benchmarks.length > 0);
 
   const [touched, setTouched] = React.useState<Record<string, boolean>>({});
 
@@ -445,9 +449,8 @@ export function useStartEvaluationRunForm({
   const hasExperiment =
     (experimentMode === 'existing' && !!selectedExperimentName?.trim()) ||
     (experimentMode === 'new' && newExperimentName.trim() !== '');
-
   const requiresHardwareProfile =
-    hardwareProfilesLoaded && kueueAvailability?.enabled === true && hardwareProfiles.length > 0;
+    !hardwareProfilesError && kueueAvailability?.enabled === true && hardwareProfiles.length > 0;
 
   const isValid = React.useMemo(() => {
     if (
@@ -910,9 +913,9 @@ export function useStartEvaluationRunForm({
     hardwareProfilesLoaded,
     hardwareProfilesError,
     kueueAvailability,
+    requiresHardwareProfile,
     hardwareProfile,
     setHardwareProfile,
-    requiresHardwareProfile,
   };
 }
 

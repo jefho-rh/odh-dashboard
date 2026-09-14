@@ -522,7 +522,7 @@ paths:
         - $ref: '#/components/parameters/namespaceRequired'
       responses:
         '200':
-          description: Queue-backed HardwareProfiles available in the namespace
+          description: Queue-backed HardwareProfiles from the platform namespace whose LocalQueues are available in the requested tenant namespace
           content:
             application/json:
               schema:

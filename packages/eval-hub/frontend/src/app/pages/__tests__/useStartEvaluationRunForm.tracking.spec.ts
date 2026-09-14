@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import { act } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import {
   fireFormTrackingEvent,
   fireMiscTrackingEvent,
@@ -7,7 +7,13 @@ import {
 import { TrackingOutcome } from '@odh-dashboard/ui-core';
 import { testHook } from '~/__tests__/unit/testUtils/hooks';
 import { EVAL_HUB_EVENTS } from '~/app/tracking/evalhubTrackingConstants';
-import type { FlatBenchmark, Collection, InferenceServiceItem } from '~/app/types';
+import type {
+  FlatBenchmark,
+  Collection,
+  HardwareProfile,
+  InferenceServiceItem,
+  KueueAvailability,
+} from '~/app/types';
 import {
   useStartEvaluationRunForm,
   EXTERNAL_ENDPOINT_VALUE,
@@ -16,6 +22,8 @@ import {
 const mockNavigate = jest.fn();
 let mockHardwareProfilesLoaded = true;
 let mockKueueAvailabilityLoaded = true;
+let mockHardwareProfiles: HardwareProfile[] = [];
+let mockKueueAvailability: KueueAvailability | undefined;
 
 jest.mock('@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils', () => ({
   fireFormTrackingEvent: jest.fn(),
@@ -47,7 +55,7 @@ jest.mock('~/app/hooks/useConnectionValidation', () => ({
 
 jest.mock('~/app/hooks/useHardwareProfiles', () => ({
   useHardwareProfiles: () => ({
-    profiles: [],
+    profiles: mockHardwareProfiles,
     loaded: mockHardwareProfilesLoaded,
     error: undefined,
   }),
@@ -55,7 +63,7 @@ jest.mock('~/app/hooks/useHardwareProfiles', () => ({
 
 jest.mock('~/app/hooks/useKueueAvailability', () => ({
   useKueueAvailability: () => ({
-    availability: undefined,
+    availability: mockKueueAvailability,
     loaded: mockKueueAvailabilityLoaded,
     error: undefined,
   }),
@@ -86,6 +94,21 @@ const mockInferenceServices: InferenceServiceItem[] = [
   { name: 'model-b', url: 'http://model-b.svc:8080', ready: true },
 ];
 
+const mockCompatibleHardwareProfile: HardwareProfile = {
+  name: 'gpu-small',
+  display_name: 'GPU small',
+  enabled: true,
+  local_queue_name: 'gpu-default',
+};
+
+const mockKueueEnabled: KueueAvailability = {
+  enabled: true,
+  cluster_enabled: true,
+  namespace_managed: true,
+  local_queues_available: true,
+  local_queue_names: ['gpu-default'],
+};
+
 const defaultFormParams = {
   namespace: 'test-ns',
   benchmark: mockBenchmark,
@@ -103,6 +126,8 @@ describe('useStartEvaluationRunForm - Tracking Events', () => {
     jest.clearAllMocks();
     mockHardwareProfilesLoaded = true;
     mockKueueAvailabilityLoaded = true;
+    mockHardwareProfiles = [];
+    mockKueueAvailability = undefined;
   });
 
   it('should remain invalid while hardware profile data is loading', () => {
@@ -110,6 +135,27 @@ describe('useStartEvaluationRunForm - Tracking Events', () => {
     const renderResult = renderForm();
 
     expect(renderResult.result.current.isValid).toBe(false);
+  });
+
+  it('requires a HardwareProfile only when Kueue has compatible profiles', async () => {
+    mockHardwareProfiles = [mockCompatibleHardwareProfile];
+    mockKueueAvailability = mockKueueEnabled;
+    const renderResult = renderForm();
+
+    act(() => {
+      renderResult.result.current.handleModelDropdownSelect('model-a', mockInferenceServices);
+      renderResult.result.current.setExperimentMode('new');
+      renderResult.result.current.setNewExperimentName('EvalHub');
+    });
+
+    await waitFor(() => expect(renderResult.result.current.requiresHardwareProfile).toBe(true));
+    expect(renderResult.result.current.isValid).toBe(false);
+
+    act(() => {
+      renderResult.result.current.setHardwareProfile(mockCompatibleHardwareProfile.name);
+    });
+
+    await waitFor(() => expect(renderResult.result.current.isValid).toBe(true));
   });
 
   describe('Evaluations Run Source Selected', () => {

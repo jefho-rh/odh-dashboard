@@ -22,6 +22,9 @@ const (
 	dscGroup                = "datasciencecluster.opendatahub.io"
 	dscVersion              = "v2"
 	dscResource             = "datascienceclusters"
+	kueueOperatorGroup      = "kueue.openshift.io"
+	kueueOperatorVersion    = "v1"
+	kueueOperatorResource   = "kueues"
 	kueueGroup              = "kueue.x-k8s.io"
 	kueueVersion            = "v1beta2"
 	localQueueResource      = "localqueues"
@@ -29,7 +32,12 @@ const (
 )
 
 var (
-	dscGVR        = schema.GroupVersionResource{Group: dscGroup, Version: dscVersion, Resource: dscResource}
+	dscGVR           = schema.GroupVersionResource{Group: dscGroup, Version: dscVersion, Resource: dscResource}
+	kueueOperatorGVR = schema.GroupVersionResource{
+		Group:    kueueOperatorGroup,
+		Version:  kueueOperatorVersion,
+		Resource: kueueOperatorResource,
+	}
 	localQueueGVR = schema.GroupVersionResource{Group: kueueGroup, Version: kueueVersion, Resource: localQueueResource}
 	kueueCache    = newKueueAvailabilityCache(kueueAvailabilityTTL)
 )
@@ -144,20 +152,29 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 
 	labels := ns.GetLabels()
 	namespaceManaged := labels[kueueManagedLabel] == "true" || labels[legacyKueueManagedLabel] == "true"
-	clusterEnabled := false
-	dscList, err := client.Resource(dscGVR).List(ctx, metav1.ListOptions{})
-	if err != nil && !k8serrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to list DataScienceClusters: %w", err)
+	clusterEnabled, externalKueueFound, err := externalKueueAvailable(ctx, client)
+	if err != nil {
+		return nil, err
 	}
-	if err == nil {
-		for _, dsc := range dscList.Items {
-			components, _, _ := unstructured.NestedMap(dsc.Object, "spec", "components")
-			kueue, _, _ := unstructured.NestedMap(components, "kueue")
-			managementState, _, _ := unstructured.NestedString(kueue, "managementState")
-			if managementState == "Managed" {
-				clusterEnabled = true
-				break
-			}
+
+	var queues *unstructured.UnstructuredList
+	if !clusterEnabled && !externalKueueFound && namespaceManaged {
+		// The Kueue operator's cluster-scoped resource may not be readable by
+		// a user token. A successful namespace-scoped LocalQueue lookup still
+		// proves that the Kueue API is installed, including the no-queue case.
+		queues, err = client.Resource(localQueueGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil && !k8serrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to list LocalQueues in namespace %q: %w", namespace, err)
+		}
+		if err == nil {
+			clusterEnabled = true
+		}
+	}
+
+	if !clusterEnabled && !externalKueueFound {
+		clusterEnabled, err = dataScienceClusterKueueManaged(ctx, client)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if !clusterEnabled || !namespaceManaged {
@@ -170,7 +187,9 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 		}, nil
 	}
 
-	queues, err := client.Resource(localQueueGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if queues == nil {
+		queues, err = client.Resource(localQueueGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	}
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return &models.KueueAvailability{
@@ -195,6 +214,65 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 		LocalQueuesAvailable: len(queueNames) > 0,
 		LocalQueueNames:      queueNames,
 	}, nil
+}
+
+// externalKueueAvailable checks the Red Hat Kueue Operator's cluster-scoped
+// resource. The result is marked as found only when a Kueue resource exists;
+// this lets older RHOAI-managed installations fall back to the DataScienceCluster
+// management state. Forbidden and missing-resource responses are also allowed to
+// use the namespace-scoped LocalQueue fallback.
+func externalKueueAvailable(ctx context.Context, client dynamic.Interface) (available, found bool, err error) {
+	kueues, err := client.Resource(kueueOperatorGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) || k8serrors.IsForbidden(err) {
+			return false, false, nil
+		}
+		return false, false, fmt.Errorf("failed to list Kueue operator resources: %w", err)
+	}
+	if len(kueues.Items) == 0 {
+		return false, false, nil
+	}
+
+	for _, kueue := range kueues.Items {
+		managementState, _, _ := unstructured.NestedString(kueue.Object, "spec", "managementState")
+		if managementState != "Managed" {
+			continue
+		}
+		conditions, _, _ := unstructured.NestedSlice(kueue.Object, "status", "conditions")
+		for _, rawCondition := range conditions {
+			condition, ok := rawCondition.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			conditionType, _ := condition["type"].(string)
+			conditionStatus, _ := condition["status"].(string)
+			if conditionType == "Available" && conditionStatus == "True" {
+				return true, true, nil
+			}
+		}
+	}
+
+	return false, true, nil
+}
+
+func dataScienceClusterKueueManaged(ctx context.Context, client dynamic.Interface) (bool, error) {
+	dscList, err := client.Resource(dscGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to list DataScienceClusters: %w", err)
+	}
+
+	for _, dsc := range dscList.Items {
+		components, _, _ := unstructured.NestedMap(dsc.Object, "spec", "components")
+		kueue, _, _ := unstructured.NestedMap(components, "kueue")
+		managementState, _, _ := unstructured.NestedString(kueue, "managementState")
+		if managementState == "Managed" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func dynamicFromConfig(config *rest.Config) (dynamic.Interface, error) {

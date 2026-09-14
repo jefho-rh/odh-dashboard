@@ -316,6 +316,7 @@ const StartEvaluationRunPage: React.FC<StartEvaluationRunPageProps> = ({
             error={form.hardwareProfilesError}
             selectedProfile={form.hardwareProfile}
             onSelect={(profile) => form.setHardwareProfile(profile?.name)}
+            isRequired={form.requiresHardwareProfile}
           />
 
           {/* ── Source dropdown ─────────────────────────────────── */}

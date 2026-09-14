@@ -27,14 +27,14 @@ func (c *kueueHardwareProfilesK8sClient) GetKueueAvailability(_ context.Context,
 	return c.availability, nil
 }
 
-func (c *kueueHardwareProfilesK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, _ string) (*models.HardwareProfilesResponse, error) {
+func (c *kueueHardwareProfilesK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, _, _ string) (*models.HardwareProfilesResponse, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
 	return c.profiles, nil
 }
 
-func (c *kueueHardwareProfilesK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, _, _ string) (string, bool, error) {
+func (c *kueueHardwareProfilesK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, _, _, _ string) (string, bool, error) {
 	return c.missingQueue, c.queueMissing, c.err
 }
 

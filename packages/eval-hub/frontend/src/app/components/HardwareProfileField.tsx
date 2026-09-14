@@ -20,14 +20,40 @@ type HardwareProfileFieldProps = {
   error?: Error;
   selectedProfile?: string;
   onSelect: (profile: HardwareProfile | undefined) => void;
+  isRequired?: boolean;
   disabled?: boolean;
+  className?: string;
+};
+
+const NO_HARDWARE_PROFILE_VALUE = '__no_hardware_profile__';
+
+const hardwareProfileHelp = {
+  ariaLabel: 'More info for hardware profile',
+  content:
+    'A HardwareProfile defines the resources requested by the evaluation and the Kueue LocalQueue used to schedule it. Kueue may wait to start the evaluation until the requested capacity is available.',
+};
+
+const formatResourceDetails = (
+  resource: NonNullable<HardwareProfile['resources']>[number],
+): string => {
+  const values = [
+    resource.default ? `Default = ${resource.default}` : undefined,
+    resource.minimum ? `Minimum = ${resource.minimum}` : undefined,
+    resource.maximum ? `Maximum = ${resource.maximum}` : undefined,
+  ].filter((value): value is string => value !== undefined);
+
+  return `${resource.display_name ?? resource.identifier}: ${values.join(', ')}`;
 };
 
 const formatDetails = (profile: HardwareProfile): string =>
-  (profile.resources ?? [])
-    .filter((resource) => resource.default)
-    .map((resource) => `${resource.display_name ?? resource.identifier}: ${resource.default}`)
-    .join(', ');
+  [
+    ...(profile.resources ?? []).filter(
+      (resource) => resource.default || resource.minimum || resource.maximum,
+    ),
+  ]
+    .map(formatResourceDetails)
+    .concat(profile.local_queue_name ? `LocalQueue: ${profile.local_queue_name}` : [])
+    .join('; ');
 
 type HardwareProfileFieldState = {
   unavailable: boolean;
@@ -40,10 +66,12 @@ const getHardwareProfileFieldState = ({
   error,
   hasNoQueues,
   hasNoProfiles,
+  isRequired,
 }: {
   error?: Error;
   hasNoQueues: boolean | undefined;
   hasNoProfiles: boolean;
+  isRequired: boolean;
 }): HardwareProfileFieldState => {
   switch (true) {
     case Boolean(error):
@@ -73,7 +101,9 @@ const getHardwareProfileFieldState = ({
       return {
         unavailable: false,
         placeholder: 'Select hardware profile',
-        helperText: 'Only queue-backed HardwareProfiles are shown for this project.',
+        helperText: isRequired
+          ? 'Select a HardwareProfile to schedule this evaluation through Kueue.'
+          : 'Only queue-backed HardwareProfiles are shown.',
       };
   }
 };
@@ -85,26 +115,38 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
   error,
   selectedProfile,
   onSelect,
+  isRequired = false,
   disabled,
+  className,
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const selected = profiles.find((profile) => profile.name === selectedProfile);
+  const formGroupClassName = `evalhub-form-group--with-description${className ? ` ${className}` : ''}`;
   const hasNoQueues =
     availability?.cluster_enabled &&
     availability.namespace_managed &&
     !availability.local_queues_available;
   const hasNoProfiles = availability?.enabled === true && profiles.length === 0;
-  const fieldState = getHardwareProfileFieldState({ error, hasNoQueues, hasNoProfiles });
+  const fieldState = getHardwareProfileFieldState({
+    error,
+    hasNoQueues,
+    hasNoProfiles,
+    isRequired,
+  });
   const profileSelectionDisabled = disabled || fieldState.unavailable;
+  const description = isRequired
+    ? 'Select the compute resources and Kueue LocalQueue for this evaluation.'
+    : 'Optional. Select the compute resources and Kueue LocalQueue for this evaluation.';
 
   if (!loaded) {
     return (
       <FormGroup
-        className="evalhub-form-group--with-description"
+        className={formGroupClassName}
         label={
           <FormGroupLabel
             label="Hardware profile"
-            description="Select the compute resources and queue for this evaluation."
+            description={description}
+            helpPopover={hardwareProfileHelp}
           />
         }
         fieldId="hardware-profile"
@@ -125,12 +167,13 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
 
   return (
     <FormGroup
-      className="evalhub-form-group--with-description"
+      className={formGroupClassName}
       label={
         <FormGroupLabel
           label="Hardware profile"
-          description="Select the compute resources and queue for this evaluation."
-          isRequired={profiles.length > 0}
+          description={description}
+          isRequired={isRequired}
+          helpPopover={hardwareProfileHelp}
         />
       }
       fieldId="hardware-profile"
@@ -139,9 +182,14 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
         id="hardware-profile-select"
         data-testid="hardware-profile-select"
         isOpen={isOpen && !profileSelectionDisabled}
-        selected={selectedProfile}
+        selected={selectedProfile ?? NO_HARDWARE_PROFILE_VALUE}
         onSelect={(_event, value) => {
-          onSelect(profiles.find((profile) => profile.name === String(value)));
+          const selectedValue = String(value);
+          onSelect(
+            selectedValue === NO_HARDWARE_PROFILE_VALUE
+              ? undefined
+              : profiles.find((profile) => profile.name === selectedValue),
+          );
           setIsOpen(false);
         }}
         onOpenChange={setIsOpen}
@@ -159,6 +207,13 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
         )}
       >
         <SelectList>
+          <SelectOption
+            value={NO_HARDWARE_PROFILE_VALUE}
+            isSelected={!selectedProfile}
+            data-testid="hardware-profile-no-selection-option"
+          >
+            No hardware profile
+          </SelectOption>
           {profiles.map((profile) => (
             <SelectOption
               key={profile.name}
@@ -174,9 +229,16 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
       </Select>
       <FormHelperText>
         <HelperText data-testid="hardware-profile-helper-text">
-          <HelperTextItem variant={fieldState.helperVariant}>
-            {fieldState.helperText}
-          </HelperTextItem>
+          {selected ? (
+            <HelperTextItem data-testid="hardware-profile-details">
+              {formatDetails(selected)}
+            </HelperTextItem>
+          ) : null}
+          {!selected || fieldState.helperVariant ? (
+            <HelperTextItem variant={fieldState.helperVariant}>
+              {fieldState.helperText}
+            </HelperTextItem>
+          ) : null}
         </HelperText>
       </FormHelperText>
     </FormGroup>
