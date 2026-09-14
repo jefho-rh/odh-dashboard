@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
@@ -14,6 +16,8 @@ import (
 )
 
 type HardwareProfileValidationEnvelope Envelope[models.HardwareProfileValidationResponse, None]
+
+const maxProviderPages = 100
 
 func (app *App) ValidateHardwareProfileHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	ctx := r.Context()
@@ -63,13 +67,26 @@ func (app *App) ValidateHardwareProfileHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if profile == nil {
+		missingQueue, queueMissing, err := k8sClient.GetMissingHardwareProfileLocalQueueName(
+			ctx,
+			identity,
+			namespace,
+			input.HardwareProfile,
+		)
+		if err != nil {
+			app.serverErrorResponse(w, r, fmt.Errorf("failed to verify HardwareProfile LocalQueue: %w", err))
+			return
+		}
+		if queueMissing {
+			app.badRequestResponse(w, r, fmt.Errorf(
+				"LocalQueue %q configured by HardwareProfile %q is no longer available in namespace %q",
+				missingQueue,
+				input.HardwareProfile,
+				namespace,
+			))
+			return
+		}
 		app.badRequestResponse(w, r, fmt.Errorf("HardwareProfile %q is not available in namespace %q", input.HardwareProfile, namespace))
-		return
-	}
-
-	providers, err := evalHubClient.ListProviders(ctx, namespace, maxProvidersLimit, 0)
-	if err != nil {
-		app.evalHubErrorResponse(w, r, err, "failed to load evaluation providers for HardwareProfile validation")
 		return
 	}
 
@@ -84,38 +101,79 @@ func (app *App) ValidateHardwareProfileHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	providers, missingProviderIDs, err := listSelectedProviders(ctx, evalHubClient, namespace, providerIDs)
+	if err != nil {
+		app.evalHubErrorResponse(w, r, err, "failed to load evaluation providers for HardwareProfile validation")
+		return
+	}
+	if len(missingProviderIDs) > 0 {
+		app.badRequestResponse(w, r, fmt.Errorf("evaluation provider %q was not found", missingProviderIDs[0]))
+		return
+	}
+
 	result := models.HardwareProfileValidationResponse{
 		Compatible:      true,
 		HardwareProfile: profile.Name,
 		Mismatches:      []models.HardwareProfileResourceMismatch{},
 	}
-	for _, provider := range providers.Items {
-		resolvedProviderID := providerID(provider)
-		selectedID := resolvedProviderID
-		if _, selected := providerIDs[selectedID]; !selected && provider.Name != resolvedProviderID {
-			if _, selectedByName := providerIDs[provider.Name]; selectedByName {
-				selectedID = provider.Name
-			}
-		}
-		if _, selected := providerIDs[selectedID]; !selected {
-			continue
-		}
+	for _, provider := range providers {
 		for _, mismatch := range validateProfileAgainstProvider(*profile, provider) {
 			result.Compatible = false
 			result.Mismatches = append(result.Mismatches, mismatch)
 		}
-		delete(providerIDs, selectedID)
-		delete(providerIDs, resolvedProviderID)
-		delete(providerIDs, provider.Name)
-	}
-	for providerID := range providerIDs {
-		app.badRequestResponse(w, r, fmt.Errorf("evaluation provider %q was not found", providerID))
-		return
 	}
 
 	if err := app.WriteJSON(w, http.StatusOK, HardwareProfileValidationEnvelope{Data: result}, nil); err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+// listSelectedProviders retrieves only the requested providers while following
+// the EvalHub provider endpoint's pagination. A provider can be selected by
+// resource ID or name, preserving the identifiers accepted by the UI.
+func listSelectedProviders(
+	ctx context.Context,
+	client evalhub.EvalHubClientInterface,
+	namespace string,
+	requested map[string]struct{},
+) ([]evalhub.Provider, []string, error) {
+	remaining := make(map[string]struct{}, len(requested))
+	for id := range requested {
+		remaining[id] = struct{}{}
+	}
+
+	providers := make([]evalhub.Provider, 0, len(requested))
+	for offset, page := 0, 0; len(remaining) > 0 && page < maxProviderPages; page, offset = page+1, offset+maxProvidersLimit {
+		response, err := client.ListProviders(ctx, namespace, maxProvidersLimit, offset)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, provider := range response.Items {
+			providerID := providerID(provider)
+			_, selectedByID := remaining[providerID]
+			_, selectedByName := remaining[provider.Name]
+			if !selectedByID && !selectedByName {
+				continue
+			}
+			providers = append(providers, provider)
+			delete(remaining, providerID)
+			delete(remaining, provider.Name)
+		}
+
+		if len(remaining) == 0 || len(response.Items) < maxProvidersLimit {
+			break
+		}
+		if response.TotalCount > 0 && offset+len(response.Items) >= response.TotalCount {
+			break
+		}
+	}
+
+	missing := make([]string, 0, len(remaining))
+	for id := range remaining {
+		missing = append(missing, id)
+	}
+	sort.Strings(missing)
+	return providers, missing, nil
 }
 
 func validateProfileAgainstProvider(profile models.HardwareProfile, provider evalhub.Provider) []models.HardwareProfileResourceMismatch {

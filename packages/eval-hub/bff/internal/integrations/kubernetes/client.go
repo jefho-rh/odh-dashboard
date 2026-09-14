@@ -38,4 +38,5 @@ type KubernetesClientInterface interface {
 	// Kueue and HardwareProfile discovery
 	GetKueueAvailability(ctx context.Context, identity *RequestIdentity, namespace string) (*models.KueueAvailability, error)
 	ListHardwareProfiles(ctx context.Context, identity *RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error)
+	GetMissingHardwareProfileLocalQueueName(ctx context.Context, identity *RequestIdentity, namespace, profileName string) (string, bool, error)
 }

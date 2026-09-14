@@ -165,6 +165,7 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
               value={profile.name}
               description={formatDetails(profile)}
               isSelected={profile.name === selectedProfile}
+              data-testid={`hardware-profile-option-${profile.name}`}
             >
               {profile.display_name}
             </SelectOption>
@@ -172,7 +173,7 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
         </SelectList>
       </Select>
       <FormHelperText>
-        <HelperText>
+        <HelperText data-testid="hardware-profile-helper-text">
           <HelperTextItem variant={fieldState.helperVariant}>
             {fieldState.helperText}
           </HelperTextItem>

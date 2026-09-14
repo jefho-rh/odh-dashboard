@@ -265,7 +265,7 @@ func (kc *TokenKubernetesClient) GetKueueAvailability(ctx context.Context, _ *Re
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic client for Kueue lookup: %w", err)
 	}
-	return getKueueAvailability(ctx, dynamicClient, namespace)
+	return getCachedKueueAvailability(ctx, dynamicClient, namespace, kueueAvailabilityCacheKey(namespace, kc.Token.Raw()))
 }
 
 func (kc *TokenKubernetesClient) ListHardwareProfiles(ctx context.Context, _ *RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error) {
@@ -273,7 +273,19 @@ func (kc *TokenKubernetesClient) ListHardwareProfiles(ctx context.Context, _ *Re
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic client for HardwareProfile lookup: %w", err)
 	}
-	return listHardwareProfiles(ctx, dynamicClient, namespace)
+	availability, err := getCachedKueueAvailability(ctx, dynamicClient, namespace, kueueAvailabilityCacheKey(namespace, kc.Token.Raw()))
+	if err != nil {
+		return nil, err
+	}
+	return listHardwareProfilesForAvailability(ctx, dynamicClient, namespace, availability)
+}
+
+func (kc *TokenKubernetesClient) GetMissingHardwareProfileLocalQueueName(ctx context.Context, _ *RequestIdentity, namespace, profileName string) (string, bool, error) {
+	dynamicClient, err := dynamicFromConfig(kc.restConfig)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to create dynamic client for HardwareProfile lookup: %w", err)
+	}
+	return getMissingHardwareProfileLocalQueueName(ctx, dynamicClient, namespace, profileName)
 }
 
 // CanListEvalHubInstances performs a SelfSubjectAccessReview to check whether the user's

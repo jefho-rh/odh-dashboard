@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/opendatahub-io/eval-hub/bff/internal/models"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -37,6 +38,15 @@ func listHardwareProfiles(
 	if err != nil {
 		return nil, err
 	}
+	return listHardwareProfilesForAvailability(ctx, client, namespace, availability)
+}
+
+func listHardwareProfilesForAvailability(
+	ctx context.Context,
+	client dynamic.Interface,
+	namespace string,
+	availability *models.KueueAvailability,
+) (*models.HardwareProfilesResponse, error) {
 	if !availability.Enabled {
 		warning := ""
 		if availability.ClusterEnabled && availability.NamespaceManaged {
@@ -112,6 +122,49 @@ func listHardwareProfiles(
 	}
 
 	return &models.HardwareProfilesResponse{Items: items}, nil
+}
+
+// getMissingHardwareProfileLocalQueueName determines whether a selected Queue
+// HardwareProfile still references an existing LocalQueue. It is intentionally
+// separate from listHardwareProfiles: callers only need this extra lookup after
+// a previously selected profile is no longer in the compatible list.
+func getMissingHardwareProfileLocalQueueName(
+	ctx context.Context,
+	client dynamic.Interface,
+	namespace, profileName string,
+) (string, bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	profile, err := client.Resource(hardwareProfileGVR).Namespace(namespace).Get(ctx, profileName, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read HardwareProfile %q in namespace %q: %w", profileName, namespace, err)
+	}
+
+	scheduling, _, _ := unstructured.NestedMap(profile.Object, "spec", "scheduling")
+	schedulingType, _, _ := unstructured.NestedString(scheduling, "type")
+	kueue, _, _ := unstructured.NestedMap(scheduling, "kueue")
+	localQueueName, _, _ := unstructured.NestedString(kueue, "localQueueName")
+	if schedulingType != "Queue" || localQueueName == "" {
+		return "", false, nil
+	}
+
+	queues, err := client.Resource(localQueueGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return localQueueName, true, nil
+		}
+		return "", false, fmt.Errorf("failed to list LocalQueues in namespace %q: %w", namespace, err)
+	}
+	for _, queue := range queues.Items {
+		if queue.GetName() == localQueueName {
+			return "", false, nil
+		}
+	}
+	return localQueueName, true, nil
 }
 
 func stringField(values map[string]interface{}, key string) string {

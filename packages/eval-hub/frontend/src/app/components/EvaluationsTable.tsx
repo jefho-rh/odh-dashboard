@@ -45,6 +45,7 @@ import {
 } from '~/app/utilities/tablePaginationConstants';
 import { evaluationCompareBenchmarksRoute, evaluationCompareRoute } from '~/app/routes';
 import useEvaluationJobDetailPolling from '~/app/hooks/useEvaluationJobDetailPolling';
+import { useKueueAvailability } from '~/app/hooks/useKueueAvailability';
 import usePageVisibility from '~/app/hooks/usePageVisibility';
 import EvaluationsTableRow from './EvaluationsTableRow';
 
@@ -140,12 +141,14 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
   onShowStatus,
 }) => {
   const navigate = useNavigate();
+  const { availability: kueueAvailability } = useKueueAvailability(namespace);
+  const isKueueEnabled = kueueAvailability?.enabled === true;
   const hasQueueAssignments = React.useMemo(
     () => evaluations.some((job) => Boolean(getEvaluationQueue(job))),
     [evaluations],
   );
   const dateColumnIndex = hasQueueAssignments ? 5 : 4;
-  const statusOptions = hasQueueAssignments
+  const statusOptions = isKueueEnabled
     ? STATUS_OPTIONS
     : STATUS_OPTIONS.filter((option) => option.value !== 'queued');
   // Pause polling when the browser tab is backgrounded to reduce server load
@@ -172,10 +175,10 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
         ? previous
         : { ...previous, index: dateColumnIndex };
     });
-    if (!hasQueueAssignments && selectedStatus === 'queued') {
+    if (!isKueueEnabled && selectedStatus === 'queued') {
       setSelectedStatus('');
     }
-  }, [dateColumnIndex, hasQueueAssignments, selectedStatus]);
+  }, [dateColumnIndex, isKueueEnabled, selectedStatus]);
 
   const filteredEvaluations = React.useMemo(
     () =>

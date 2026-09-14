@@ -3,8 +3,11 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/opendatahub-io/eval-hub/bff/internal/models"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -109,6 +112,61 @@ func TestGetKueueAvailability(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestKueueAvailabilityCacheSharesInFlightLookupAndReturnsClones(t *testing.T) {
+	cache := newKueueAvailabilityCache(time.Minute)
+	var loads atomic.Int32
+	started := make(chan struct{})
+	release := make(chan struct{})
+	load := func() (*models.KueueAvailability, error) {
+		loads.Add(1)
+		close(started)
+		<-release
+		return &models.KueueAvailability{Enabled: true, LocalQueueNames: []string{"gpu-default"}}, nil
+	}
+
+	type result struct {
+		availability *models.KueueAvailability
+		err          error
+	}
+	results := make(chan result, 2)
+	go func() {
+		availability, err := cache.get(context.Background(), "user-a:namespace-a", load)
+		results <- result{availability: availability, err: err}
+	}()
+	<-started
+	go func() {
+		availability, err := cache.get(context.Background(), "user-a:namespace-a", load)
+		results <- result{availability: availability, err: err}
+	}()
+	close(release)
+
+	for range 2 {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("cache lookup returned an error: %v", result.err)
+		}
+	}
+	if loads.Load() != 1 {
+		t.Fatalf("cache loader calls = %d, want 1", loads.Load())
+	}
+
+	first, err := cache.get(context.Background(), "user-a:namespace-a", load)
+	if err != nil {
+		t.Fatalf("cached lookup returned an error: %v", err)
+	}
+	first.LocalQueueNames[0] = "mutated"
+	second, err := cache.get(context.Background(), "user-a:namespace-a", load)
+	if err != nil {
+		t.Fatalf("second cached lookup returned an error: %v", err)
+	}
+	if loads.Load() != 1 {
+		t.Fatalf("cache loader calls after cached lookup = %d, want 1", loads.Load())
+	}
+	if second.LocalQueueNames[0] != "gpu-default" {
+		t.Fatalf("cached availability was mutated: %v", second.LocalQueueNames)
 	}
 }
 

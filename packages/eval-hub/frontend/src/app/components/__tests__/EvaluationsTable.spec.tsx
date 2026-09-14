@@ -6,6 +6,7 @@ import { EvaluationJob } from '~/app/types';
 import { mockEvaluationJob } from '~/__tests__/unit/testUtils/mockEvaluationData';
 import EvaluationsTable from '~/app/components/EvaluationsTable';
 
+const mockUseKueueAvailability = jest.fn();
 const mockOnRefresh = jest.fn();
 const mockOnShowStatus = jest.fn();
 const mockNavigate = jest.fn();
@@ -26,12 +27,21 @@ jest.mock('@odh-dashboard/ui-core', () => ({
   ),
 }));
 
+jest.mock('~/app/hooks/useKueueAvailability', () => ({
+  useKueueAvailability: () => mockUseKueueAvailability(),
+}));
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
 
 beforeEach(() => {
   queryClient.clear();
+  mockUseKueueAvailability.mockReturnValue({
+    availability: undefined,
+    loaded: true,
+    error: undefined,
+  });
 });
 
 const renderTable = (props: {
@@ -254,6 +264,21 @@ describe('EvaluationsTable', () => {
   });
 
   describe('filtering', () => {
+    it('should offer the Queued status filter when Kueue is enabled without queued jobs', () => {
+      mockUseKueueAvailability.mockReturnValue({
+        availability: { enabled: true },
+        loaded: true,
+        error: undefined,
+      });
+      renderTable({ evaluations: mockJobs, loaded: true });
+
+      fireEvent.click(screen.getByTestId('filter-type-toggle'));
+      fireEvent.click(screen.getByRole('option', { name: 'Status' }));
+      fireEvent.click(screen.getByTestId('filter-status-toggle'));
+
+      expect(screen.getByTestId('filter-status-option-queued')).toBeInTheDocument();
+    });
+
     it('should filter by evaluation name', () => {
       renderTable({ evaluations: mockJobs, loaded: true });
       const searchInput = screen.getByTestId('filter-toolbar-text-field').querySelector('input')!;

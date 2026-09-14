@@ -189,6 +189,10 @@ func (c *testK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.Re
 	return &models.HardwareProfilesResponse{}, nil
 }
 
+func (c *testK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, _, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
 // erroringEHClient is a minimal EvalHub client whose HealthCheck always returns an error.
 // Used in health handler tests to simulate "service-unreachable".
 type erroringEHClient struct{}

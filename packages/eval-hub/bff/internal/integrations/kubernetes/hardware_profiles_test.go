@@ -52,6 +52,42 @@ func TestListHardwareProfilesWarnsWhenNoLocalQueuesExist(t *testing.T) {
 	}
 }
 
+func TestGetMissingHardwareProfileLocalQueueName(t *testing.T) {
+	client := newKueueFakeClient(
+		namespaceObject(map[string]interface{}{kueueManagedLabel: "true"}),
+		managedDataScienceCluster(),
+		localQueue("gpu-default"),
+		hardwareProfile("available", "Available", true, "Queue", "gpu-default", nil),
+		hardwareProfile("stale", "Stale", true, "Queue", "removed-queue", nil),
+	)
+
+	queue, missing, err := getMissingHardwareProfileLocalQueueName(
+		context.Background(),
+		client,
+		testNamespace,
+		"stale",
+	)
+	if err != nil {
+		t.Fatalf("getMissingHardwareProfileLocalQueueName() error = %v", err)
+	}
+	if !missing || queue != "removed-queue" {
+		t.Fatalf("missing LocalQueue = (%q, %t), want (removed-queue, true)", queue, missing)
+	}
+
+	queue, missing, err = getMissingHardwareProfileLocalQueueName(
+		context.Background(),
+		client,
+		testNamespace,
+		"available",
+	)
+	if err != nil {
+		t.Fatalf("getMissingHardwareProfileLocalQueueName() error = %v", err)
+	}
+	if missing || queue != "" {
+		t.Fatalf("available LocalQueue = (%q, %t), want (empty, false)", queue, missing)
+	}
+}
+
 func hardwareProfile(
 	name string,
 	displayName string,
