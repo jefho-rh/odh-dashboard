@@ -511,6 +511,54 @@ paths:
           $ref: '#/components/responses/InternalServerError'
       operationId: getKueueAvailability
 
+  /eval-hub/api/v1/kueue/workloads:
+    summary: Get Kueue Workload statuses for evaluation jobs
+    description: >-
+      Returns the Kueue admission status for the Kubernetes Workloads created by
+      the requested EvalHub evaluation jobs. Evaluations with no matching Kueue
+      Workload are omitted from the response.
+    get:
+      tags:
+        - Kueue
+      security:
+        - Bearer: []
+      parameters:
+        - $ref: '#/components/parameters/namespaceRequired'
+        - in: query
+          name: evaluation_ids
+          required: true
+          description: Comma-separated EvalHub evaluation job IDs, with a maximum of 100 unique IDs.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items:
+              type: string
+              minLength: 1
+      responses:
+        '200':
+          description: Kueue Workload status for each requested evaluation that has a matching Workload
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/KueueWorkloadStatusesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: getKueueWorkloadStatuses
+
   /eval-hub/api/v1/hardwareprofiles:
     summary: List compatible HardwareProfiles
     get:
@@ -522,7 +570,7 @@ paths:
         - $ref: '#/components/parameters/namespaceRequired'
       responses:
         '200':
-          description: Queue-backed HardwareProfiles from the platform namespace whose LocalQueues are available in the requested tenant namespace
+          description: Queue-backed HardwareProfiles in the requested evaluation namespace whose LocalQueues are available there
           content:
             application/json:
               schema:
@@ -1645,6 +1693,43 @@ components:
           type: array
           items:
             type: string
+
+    KueueWorkloadState:
+      type: string
+      enum:
+        - queued
+        - admitted
+        - finished
+        - preempted
+
+    KueueWorkloadStatus:
+      type: object
+      required:
+        - evaluation_id
+        - queue_name
+        - state
+      properties:
+        evaluation_id:
+          type: string
+          description: EvalHub evaluation job ID associated with the Kueue Workload
+        queue_name:
+          type: string
+          description: Kueue LocalQueue used by the Workload
+        state:
+          $ref: '#/components/schemas/KueueWorkloadState'
+        message:
+          type: string
+          description: Optional status detail reported by Kueue
+
+    KueueWorkloadStatusesResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KueueWorkloadStatus'
 
     # HARDWARE PROFILE SCHEMAS
     HardwareProfileResource:

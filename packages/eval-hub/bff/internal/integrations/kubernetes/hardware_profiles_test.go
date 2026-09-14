@@ -21,7 +21,7 @@ func TestListHardwareProfilesReturnsOnlyQueueCompatibleProfiles(t *testing.T) {
 		hardwareProfile("spec-disabled", "Spec Disabled", false, "Queue", "gpu-default", nil),
 	)
 
-	response, err := listHardwareProfiles(context.Background(), client, testNamespace, testNamespace)
+	response, err := listHardwareProfiles(context.Background(), client, testNamespace)
 	if err != nil {
 		t.Fatalf("listHardwareProfiles() error = %v", err)
 	}
@@ -40,7 +40,7 @@ func TestListHardwareProfilesWarnsWhenNoLocalQueuesExist(t *testing.T) {
 		managedDataScienceCluster(),
 	)
 
-	response, err := listHardwareProfiles(context.Background(), client, testNamespace, testNamespace)
+	response, err := listHardwareProfiles(context.Background(), client, testNamespace)
 	if err != nil {
 		t.Fatalf("listHardwareProfiles() error = %v", err)
 	}
@@ -52,16 +52,17 @@ func TestListHardwareProfilesWarnsWhenNoLocalQueuesExist(t *testing.T) {
 	}
 }
 
-func TestListHardwareProfilesUsesPlatformProfilesAndTenantQueues(t *testing.T) {
-	profileNamespace := "redhat-ods-applications"
+func TestListHardwareProfilesUsesEvaluationNamespaceForProfilesAndQueues(t *testing.T) {
+	platformNamespace := "redhat-ods-applications"
 	client := newKueueFakeClient(
 		namespaceObject(map[string]interface{}{kueueManagedLabel: "true"}),
 		managedDataScienceCluster(),
 		localQueueInNamespace("default", testNamespace),
-		hardwareProfileInNamespace("evalhub-cpu", "EvalHub CPU", true, "Queue", "default", nil, profileNamespace),
+		hardwareProfileInNamespace("evalhub-cpu", "EvalHub CPU", true, "Queue", "default", nil, testNamespace),
+		hardwareProfileInNamespace("platform-cpu", "Platform CPU", true, "Queue", "default", nil, platformNamespace),
 	)
 
-	response, err := listHardwareProfiles(context.Background(), client, profileNamespace, testNamespace)
+	response, err := listHardwareProfiles(context.Background(), client, testNamespace)
 	if err != nil {
 		t.Fatalf("listHardwareProfiles() error = %v", err)
 	}
@@ -83,7 +84,6 @@ func TestGetMissingHardwareProfileLocalQueueName(t *testing.T) {
 		context.Background(),
 		client,
 		testNamespace,
-		testNamespace,
 		"stale",
 	)
 	if err != nil {
@@ -96,7 +96,6 @@ func TestGetMissingHardwareProfileLocalQueueName(t *testing.T) {
 	queue, missing, err = getMissingHardwareProfileLocalQueueName(
 		context.Background(),
 		client,
-		testNamespace,
 		testNamespace,
 		"available",
 	)

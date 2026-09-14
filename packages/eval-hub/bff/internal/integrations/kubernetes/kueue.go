@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,7 +29,10 @@ const (
 	kueueGroup              = "kueue.x-k8s.io"
 	kueueVersion            = "v1beta2"
 	localQueueResource      = "localqueues"
+	workloadResource        = "workloads"
 	kueueAvailabilityTTL    = 15 * time.Second
+	evalHubJobIDAnnotation  = "eval-hub.github.io/job_id"
+	evalHubJobIDLabel       = "job_id"
 )
 
 var (
@@ -39,6 +43,7 @@ var (
 		Resource: kueueOperatorResource,
 	}
 	localQueueGVR = schema.GroupVersionResource{Group: kueueGroup, Version: kueueVersion, Resource: localQueueResource}
+	workloadGVR   = schema.GroupVersionResource{Group: kueueGroup, Version: kueueVersion, Resource: workloadResource}
 	kueueCache    = newKueueAvailabilityCache(kueueAvailabilityTTL)
 )
 
@@ -273,6 +278,178 @@ func dataScienceClusterKueueManaged(ctx context.Context, client dynamic.Interfac
 		}
 	}
 	return false, nil
+}
+
+// getKueueWorkloadStatuses lists the namespace's Kueue Workloads once, then
+// matches them to the requested EvalHub evaluation IDs. EvalHub records its ID
+// on the Workload's pod-template metadata; workload names are intentionally
+// not used because they are generated and can be truncated.
+func getKueueWorkloadStatuses(
+	ctx context.Context,
+	client dynamic.Interface,
+	namespace string,
+	evaluationIDs []string,
+) (*models.KueueWorkloadStatusesResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	requested := make(map[string]struct{}, len(evaluationIDs))
+	for _, evaluationID := range evaluationIDs {
+		requested[evaluationID] = struct{}{}
+	}
+
+	workloads, err := client.Resource(workloadGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return &models.KueueWorkloadStatusesResponse{Items: []models.KueueWorkloadStatus{}}, nil
+		}
+		return nil, fmt.Errorf("failed to list Kueue Workloads in namespace %q: %w", namespace, err)
+	}
+
+	type workloadSummary struct {
+		queueName        string
+		count            int
+		admitted         bool
+		admittedMessage  string
+		finished         int
+		finishedMessage  string
+		preempted        bool
+		preemptedMessage string
+		queuedMessage    string
+	}
+	summaries := make(map[string]*workloadSummary, len(evaluationIDs))
+
+	for index := range workloads.Items {
+		workload := &workloads.Items[index]
+		evaluationID := workloadEvaluationID(workload)
+		if _, found := requested[evaluationID]; !found {
+			continue
+		}
+
+		summary, found := summaries[evaluationID]
+		if !found {
+			summary = &workloadSummary{}
+			summaries[evaluationID] = summary
+		}
+		summary.count++
+		if summary.queueName == "" {
+			summary.queueName = workloadQueueName(workload)
+		}
+
+		workloadFinished := false
+		workloadAdmitted := false
+		for _, condition := range workloadConditions(workload) {
+			if !condition.isTrue {
+				continue
+			}
+			message := firstNonEmpty(condition.message, condition.reason)
+			switch {
+			case condition.conditionType == "Admitted":
+				workloadAdmitted = true
+				summary.admittedMessage = firstNonEmpty(summary.admittedMessage, message)
+			case condition.conditionType == "Finished":
+				workloadFinished = true
+				summary.finishedMessage = firstNonEmpty(summary.finishedMessage, message)
+			case condition.conditionType == "Evicted" || strings.Contains(strings.ToLower(condition.reason), "preempt"):
+				summary.preempted = true
+				summary.preemptedMessage = firstNonEmpty(summary.preemptedMessage, message)
+			default:
+				summary.queuedMessage = firstNonEmpty(summary.queuedMessage, message)
+			}
+		}
+		if workloadFinished {
+			summary.finished++
+		} else if workloadAdmitted {
+			summary.admitted = true
+		}
+	}
+
+	items := make([]models.KueueWorkloadStatus, 0, len(summaries))
+	for _, evaluationID := range evaluationIDs {
+		summary, found := summaries[evaluationID]
+		if !found {
+			continue
+		}
+
+		state, message := models.KueueWorkloadStateQueued, summary.queuedMessage
+		switch {
+		case summary.preempted:
+			state, message = models.KueueWorkloadStatePreempted, summary.preemptedMessage
+		case summary.finished == summary.count:
+			state, message = models.KueueWorkloadStateFinished, summary.finishedMessage
+		case summary.admitted:
+			state, message = models.KueueWorkloadStateAdmitted, summary.admittedMessage
+		}
+
+		items = append(items, models.KueueWorkloadStatus{
+			EvaluationID: evaluationID,
+			QueueName:    summary.queueName,
+			State:        state,
+			Message:      message,
+		})
+	}
+
+	return &models.KueueWorkloadStatusesResponse{Items: items}, nil
+}
+
+type kueueWorkloadCondition struct {
+	conditionType string
+	isTrue        bool
+	reason        string
+	message       string
+}
+
+func workloadConditions(workload *unstructured.Unstructured) []kueueWorkloadCondition {
+	rawConditions, found, err := unstructured.NestedSlice(workload.Object, "status", "conditions")
+	if err != nil || !found {
+		return nil
+	}
+
+	conditions := make([]kueueWorkloadCondition, 0, len(rawConditions))
+	for _, rawCondition := range rawConditions {
+		condition, ok := rawCondition.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		conditions = append(conditions, kueueWorkloadCondition{
+			conditionType: stringField(condition, "type"),
+			isTrue:        stringField(condition, "status") == "True",
+			reason:        stringField(condition, "reason"),
+			message:       stringField(condition, "message"),
+		})
+	}
+	return conditions
+}
+
+func workloadQueueName(workload *unstructured.Unstructured) string {
+	queueName, _, _ := unstructured.NestedString(workload.Object, "spec", "queueName")
+	return queueName
+}
+
+func workloadEvaluationID(workload *unstructured.Unstructured) string {
+	podSets, found, err := unstructured.NestedSlice(workload.Object, "spec", "podSets")
+	if err != nil || !found {
+		return ""
+	}
+
+	for _, rawPodSet := range podSets {
+		podSet, ok := rawPodSet.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		template, _, _ := unstructured.NestedMap(podSet, "template")
+		metadata, _, _ := unstructured.NestedMap(template, "metadata")
+		annotations, _, _ := unstructured.NestedStringMap(metadata, "annotations")
+		if evaluationID := strings.TrimSpace(annotations[evalHubJobIDAnnotation]); evaluationID != "" {
+			return evaluationID
+		}
+		labels, _, _ := unstructured.NestedStringMap(metadata, "labels")
+		if evaluationID := strings.TrimSpace(labels[evalHubJobIDLabel]); evaluationID != "" {
+			return evaluationID
+		}
+	}
+
+	return ""
 }
 
 func dynamicFromConfig(config *rest.Config) (dynamic.Interface, error) {

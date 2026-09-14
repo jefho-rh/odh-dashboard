@@ -80,7 +80,11 @@ func (m *TokenKubernetesClientMock) GetKueueAvailability(_ context.Context, _ *k
 	}, nil
 }
 
-func (m *TokenKubernetesClientMock) ListHardwareProfiles(_ context.Context, _ *k8s.RequestIdentity, _, _ string) (*models.HardwareProfilesResponse, error) {
+func (m *TokenKubernetesClientMock) GetKueueWorkloadStatuses(_ context.Context, _ *k8s.RequestIdentity, _ string, _ []string) (*models.KueueWorkloadStatusesResponse, error) {
+	return &models.KueueWorkloadStatusesResponse{Items: []models.KueueWorkloadStatus{}}, nil
+}
+
+func (m *TokenKubernetesClientMock) ListHardwareProfiles(_ context.Context, _ *k8s.RequestIdentity, _ string) (*models.HardwareProfilesResponse, error) {
 	return &models.HardwareProfilesResponse{
 		Items: []models.HardwareProfile{
 			{

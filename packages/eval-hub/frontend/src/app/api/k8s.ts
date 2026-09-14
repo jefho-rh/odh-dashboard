@@ -26,6 +26,8 @@ import {
   EvaluationJobsResponse,
   InferenceServicesResponse,
   KueueAvailability,
+  KueueWorkloadStatus,
+  KueueWorkloadStatusesResponse,
   HardwareProfile,
   HardwareProfilesResponse,
   ListCollectionsParams,
@@ -222,6 +224,24 @@ export const getKueueAvailability =
         return response.data;
       }
       throw new Error('Invalid Kueue availability response format');
+    });
+
+export const getKueueWorkloadStatuses =
+  (hostPath: string, namespace: string, evaluationIds: string[]) =>
+  (opts: APIOptions): Promise<KueueWorkloadStatus[]> =>
+    handleRestFailures(
+      restGET(
+        hostPath,
+        `${URL_PREFIX}/api/${BFF_API_VERSION}/kueue/workloads`,
+        // eslint-disable-next-line camelcase -- Query parameter follows the BFF OpenAPI contract.
+        { namespace, evaluation_ids: evaluationIds.join(',') },
+        opts,
+      ),
+    ).then((response) => {
+      if (isModArchResponse<KueueWorkloadStatusesResponse>(response)) {
+        return response.data.items;
+      }
+      throw new Error('Invalid Kueue Workload status response format');
     });
 
 export const getHardwareProfiles =

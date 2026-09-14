@@ -25,11 +25,7 @@ func (app *App) HardwareProfilesHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	namespace, _ := ctx.Value(constants.NamespaceHeaderParameterKey).(string)
-	profileNamespace := app.dashboardNamespace
-	if profileNamespace == "" {
-		profileNamespace = namespace
-	}
-	profiles, err := client.ListHardwareProfiles(ctx, identity, profileNamespace, namespace)
+	profiles, err := client.ListHardwareProfiles(ctx, identity, namespace)
 	if err != nil {
 		app.serverErrorResponse(w, r, fmt.Errorf("failed to list HardwareProfiles: %w", err))
 		return

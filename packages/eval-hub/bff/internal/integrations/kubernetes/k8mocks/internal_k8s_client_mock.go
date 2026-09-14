@@ -69,7 +69,11 @@ func (m *InternalKubernetesClientMock) GetKueueAvailability(_ context.Context, _
 	}, nil
 }
 
-func (m *InternalKubernetesClientMock) ListHardwareProfiles(_ context.Context, _ *k8s.RequestIdentity, _, _ string) (*models.HardwareProfilesResponse, error) {
+func (m *InternalKubernetesClientMock) GetKueueWorkloadStatuses(_ context.Context, _ *k8s.RequestIdentity, _ string, _ []string) (*models.KueueWorkloadStatusesResponse, error) {
+	return &models.KueueWorkloadStatusesResponse{Items: []models.KueueWorkloadStatus{}}, nil
+}
+
+func (m *InternalKubernetesClientMock) ListHardwareProfiles(_ context.Context, _ *k8s.RequestIdentity, _ string) (*models.HardwareProfilesResponse, error) {
 	return &models.HardwareProfilesResponse{
 		Items: []models.HardwareProfile{
 			{

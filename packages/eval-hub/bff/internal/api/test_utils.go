@@ -185,11 +185,15 @@ func (c *testK8sClient) GetKueueAvailability(_ context.Context, _ *kubernetes.Re
 	return &models.KueueAvailability{}, nil
 }
 
-func (c *testK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, _, _ string) (*models.HardwareProfilesResponse, error) {
+func (c *testK8sClient) GetKueueWorkloadStatuses(_ context.Context, _ *kubernetes.RequestIdentity, _ string, _ []string) (*models.KueueWorkloadStatusesResponse, error) {
+	return &models.KueueWorkloadStatusesResponse{}, nil
+}
+
+func (c *testK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, _ string) (*models.HardwareProfilesResponse, error) {
 	return &models.HardwareProfilesResponse{}, nil
 }
 
-func (c *testK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, _, _, _ string) (string, bool, error) {
+func (c *testK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, _, _ string) (string, bool, error) {
 	return "", false, nil
 }
 

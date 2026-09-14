@@ -13,11 +13,16 @@ import (
 
 type kueueHardwareProfilesK8sClient struct {
 	testK8sClient
-	availability *models.KueueAvailability
-	profiles     *models.HardwareProfilesResponse
-	missingQueue string
-	queueMissing bool
-	err          error
+	availability            *models.KueueAvailability
+	profiles                *models.HardwareProfilesResponse
+	workloadStatuses        *models.KueueWorkloadStatusesResponse
+	missingQueue            string
+	queueMissing            bool
+	profileNamespace        string
+	missingProfileNamespace string
+	workloadNamespace       string
+	workloadEvaluationIDs   []string
+	err                     error
 }
 
 func (c *kueueHardwareProfilesK8sClient) GetKueueAvailability(_ context.Context, _ *kubernetes.RequestIdentity, _ string) (*models.KueueAvailability, error) {
@@ -27,17 +32,30 @@ func (c *kueueHardwareProfilesK8sClient) GetKueueAvailability(_ context.Context,
 	return c.availability, nil
 }
 
-func (c *kueueHardwareProfilesK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, _, _ string) (*models.HardwareProfilesResponse, error) {
+func (c *kueueHardwareProfilesK8sClient) GetKueueWorkloadStatuses(_ context.Context, _ *kubernetes.RequestIdentity, namespace string, evaluationIDs []string) (*models.KueueWorkloadStatusesResponse, error) {
+	c.workloadNamespace = namespace
+	c.workloadEvaluationIDs = evaluationIDs
+	if c.err != nil {
+		return nil, c.err
+	}
+	return c.workloadStatuses, nil
+}
+
+func (c *kueueHardwareProfilesK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error) {
+	c.profileNamespace = namespace
 	if c.err != nil {
 		return nil, c.err
 	}
 	return c.profiles, nil
 }
 
-func (c *kueueHardwareProfilesK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, _, _, _ string) (string, bool, error) {
+func (c *kueueHardwareProfilesK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, namespace, _ string) (string, bool, error) {
+	c.missingProfileNamespace = namespace
 	return c.missingQueue, c.queueMissing, c.err
 }
 
+// TestKueueAvailabilityHandlerReturnsAvailability verifies that the availability endpoint returns
+// the Kueue and LocalQueue information reported by Kubernetes for the requested namespace.
 func TestKueueAvailabilityHandlerReturnsAvailability(t *testing.T) {
 	client := &kueueHardwareProfilesK8sClient{
 		availability: &models.KueueAvailability{
@@ -67,6 +85,63 @@ func TestKueueAvailabilityHandlerReturnsAvailability(t *testing.T) {
 	}
 }
 
+// TestKueueWorkloadStatusesHandlerReturnsStatuses verifies that the status endpoint returns
+// Kueue status data and passes a de-duplicated evaluation-ID list in the requested namespace.
+func TestKueueWorkloadStatusesHandlerReturnsStatuses(t *testing.T) {
+	client := &kueueHardwareProfilesK8sClient{workloadStatuses: &models.KueueWorkloadStatusesResponse{
+		Items: []models.KueueWorkloadStatus{{
+			EvaluationID: "job-1",
+			QueueName:    "default",
+			State:        models.KueueWorkloadStateQueued,
+			Message:      "Waiting for quota",
+		}},
+	}}
+	result, response, err := setupApiTestWithEvalHub[KueueWorkloadStatusesEnvelope](
+		http.MethodGet,
+		"/eval-hub/api/v1/kueue/workloads?namespace=test-namespace&evaluation_ids=job-1,job-2,job-1",
+		nil,
+		&crStatusK8sFactory{client: client},
+		&kubernetes.RequestIdentity{UserID: "test-user"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if len(result.Data.Items) != 1 || result.Data.Items[0].State != models.KueueWorkloadStateQueued {
+		t.Fatalf("unexpected Kueue Workload response: %+v", result.Data)
+	}
+	if client.workloadNamespace != "test-namespace" {
+		t.Fatalf("Workload namespace = %q, want test-namespace", client.workloadNamespace)
+	}
+	if len(client.workloadEvaluationIDs) != 2 || client.workloadEvaluationIDs[0] != "job-1" || client.workloadEvaluationIDs[1] != "job-2" {
+		t.Fatalf("evaluation IDs = %v, want [job-1 job-2]", client.workloadEvaluationIDs)
+	}
+}
+
+// TestKueueWorkloadStatusesHandlerRejectsMissingEvaluationIDs verifies that evaluation IDs are
+// required, so the BFF never lists Workloads without a specific set of evaluation runs to match.
+func TestKueueWorkloadStatusesHandlerRejectsMissingEvaluationIDs(t *testing.T) {
+	_, response, err := setupApiTestWithEvalHub[HTTPError](
+		http.MethodGet,
+		"/eval-hub/api/v1/kueue/workloads?namespace=test-namespace",
+		nil,
+		&crStatusK8sFactory{client: &kueueHardwareProfilesK8sClient{}},
+		&kubernetes.RequestIdentity{UserID: "test-user"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadRequest)
+	}
+}
+
+// TestHardwareProfilesHandlerReturnsProfiles verifies that the profile endpoint returns
+// queue-compatible HardwareProfiles from the namespace where the evaluation will run.
 func TestHardwareProfilesHandlerReturnsProfiles(t *testing.T) {
 	client := &kueueHardwareProfilesK8sClient{profiles: &models.HardwareProfilesResponse{
 		Items: []models.HardwareProfile{{
@@ -94,8 +169,13 @@ func TestHardwareProfilesHandlerReturnsProfiles(t *testing.T) {
 	if len(result.Data.Items) != 1 || result.Data.Items[0].LocalQueueName != "gpu-default" {
 		t.Fatalf("unexpected HardwareProfiles response: %+v", result.Data)
 	}
+	if client.profileNamespace != "test-namespace" {
+		t.Fatalf("HardwareProfile namespace = %q, want test-namespace", client.profileNamespace)
+	}
 }
 
+// TestValidateHardwareProfileHandlerReportsDeletedLocalQueue verifies that submission is rejected
+// if the selected profile references a LocalQueue that was deleted after the form loaded.
 func TestValidateHardwareProfileHandlerReportsDeletedLocalQueue(t *testing.T) {
 	client := &kueueHardwareProfilesK8sClient{
 		profiles:     &models.HardwareProfilesResponse{},
@@ -119,6 +199,35 @@ func TestValidateHardwareProfileHandlerReportsDeletedLocalQueue(t *testing.T) {
 	if result.Error.Message != "LocalQueue \"gpu-default\" configured by HardwareProfile \"gpu\" is no longer available in namespace \"test-namespace\"" {
 		t.Fatalf("unexpected error response: %+v", result)
 	}
+	if client.profileNamespace != "test-namespace" || client.missingProfileNamespace != "test-namespace" {
+		t.Fatalf("HardwareProfile namespaces = (%q, %q), want (test-namespace, test-namespace)", client.profileNamespace, client.missingProfileNamespace)
+	}
+}
+
+// TestValidateHardwareProfileHandlerReportsProfileMissingFromEvaluationNamespace verifies that
+// submission is rejected if the chosen HardwareProfile no longer exists in the evaluation namespace.
+func TestValidateHardwareProfileHandlerReportsProfileMissingFromEvaluationNamespace(t *testing.T) {
+	client := &kueueHardwareProfilesK8sClient{profiles: &models.HardwareProfilesResponse{}}
+	result, response, err := setupApiTestWithEvalHub[HTTPError](
+		http.MethodPost,
+		"/eval-hub/api/v1/hardwareprofiles/validate?namespace=test-namespace",
+		models.HardwareProfileValidationRequest{HardwareProfile: "gpu", ProviderIDs: []string{"provider"}},
+		&crStatusK8sFactory{client: client},
+		&kubernetes.RequestIdentity{UserID: "test-user"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadRequest)
+	}
+	if result.Error.Message != "HardwareProfile \"gpu\" is not available in namespace \"test-namespace\"" {
+		t.Fatalf("unexpected error response: %+v", result)
+	}
+	if client.profileNamespace != "test-namespace" || client.missingProfileNamespace != "test-namespace" {
+		t.Fatalf("HardwareProfile namespaces = (%q, %q), want (test-namespace, test-namespace)", client.profileNamespace, client.missingProfileNamespace)
+	}
 }
 
 type paginatedProvidersClient struct {
@@ -135,6 +244,8 @@ func (c *paginatedProvidersClient) ListProviders(_ context.Context, _ string, li
 	return c.pages[offset], nil
 }
 
+// TestListSelectedProvidersFollowsPagination verifies that validation checks every provider page,
+// rather than incorrectly declaring a provider missing when it is not on the first page.
 func TestListSelectedProvidersFollowsPagination(t *testing.T) {
 	firstPage := make([]evalhub.Provider, maxProvidersLimit)
 	for i := range firstPage {

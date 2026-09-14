@@ -231,6 +231,7 @@ func newKueueFakeClient(objects ...runtime.Object) *dynamicfake.FakeDynamicClien
 			dscGVR:                                  "DataScienceClusterList",
 			kueueOperatorGVR:                        "KueueList",
 			localQueueGVR:                           "LocalQueueList",
+			workloadGVR:                             "WorkloadList",
 			hardwareProfileGVR:                      "HardwareProfileList",
 		},
 		objects...,

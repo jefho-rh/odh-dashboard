@@ -54,6 +54,19 @@ export type KueueAvailability = {
   local_queue_names: string[];
 };
 
+export type KueueWorkloadState = 'queued' | 'admitted' | 'finished' | 'preempted';
+
+export type KueueWorkloadStatus = {
+  evaluation_id: string;
+  queue_name: string;
+  state: KueueWorkloadState;
+  message?: string;
+};
+
+export type KueueWorkloadStatusesResponse = {
+  items: KueueWorkloadStatus[];
+};
+
 export type HardwareProfileResource = {
   display_name?: string;
   identifier: string;

@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ActionsColumn, IAction, Td, Tr } from '@patternfly/react-table';
-import { Button, Checkbox, Tooltip } from '@patternfly/react-core';
+import { Button, Checkbox, Skeleton, Tooltip } from '@patternfly/react-core';
 import { Link, useNavigate } from 'react-router-dom';
 import { fireMiscTrackingEvent } from '@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils';
-import { EvaluationJob, EvaluationJobState } from '~/app/types';
+import { EvaluationJob, EvaluationJobState, KueueWorkloadStatus } from '~/app/types';
 import { EVAL_HUB_EVENTS } from '~/app/tracking/evalhubTrackingConstants';
 import {
   formatDate,
@@ -21,6 +21,7 @@ import { CollectionNameMap } from '~/app/hooks/useCollectionNameMap';
 import { deleteEvaluationJob } from '~/app/api/k8s';
 import { evaluationReconfigureRoute } from '~/app/routes';
 import EvaluationStatusLabel from './EvaluationStatusLabel';
+import KueueWorkloadStatusLabel from './KueueWorkloadStatusLabel';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import StopEvaluationModal from './StopEvaluationModal';
 import './EvaluationsTableRow.scss';
@@ -36,6 +37,10 @@ type EvaluationsTableRowProps = {
   isSelected: boolean;
   onSelectionChange: (checked: boolean) => void;
   showQueue?: boolean;
+  showKueueStatus?: boolean;
+  kueueWorkloadStatus?: KueueWorkloadStatus;
+  isKueueWorkloadStatusLoading?: boolean;
+  hasKueueWorkloadStatusError?: boolean;
 };
 
 const IN_PROGRESS_STATES = new Set(['running', 'pending', 'stopping']);
@@ -51,6 +56,10 @@ const EvaluationsTableRow: React.FC<EvaluationsTableRowProps> = ({
   isSelected,
   onSelectionChange,
   showQueue = true,
+  showKueueStatus = false,
+  kueueWorkloadStatus,
+  isKueueWorkloadStatusLoading = false,
+  hasKueueWorkloadStatusError = false,
 }) => {
   const navigate = useNavigate();
   const [showStopModal, setShowStopModal] = React.useState(false);
@@ -236,6 +245,19 @@ const EvaluationsTableRow: React.FC<EvaluationsTableRowProps> = ({
             </div>
           ) : null}
         </Td>
+        {showKueueStatus && (
+          <Td dataLabel="Kueue status" data-testid="evaluation-kueue-status">
+            {hasKueueWorkloadStatusError ? (
+              'Unavailable'
+            ) : isKueueWorkloadStatusLoading ? (
+              <Skeleton width="6rem" screenreaderText="Loading Kueue status" />
+            ) : kueueWorkloadStatus ? (
+              <KueueWorkloadStatusLabel status={kueueWorkloadStatus} />
+            ) : (
+              '-'
+            )}
+          </Td>
+        )}
         {showQueue && (
           <Td dataLabel="Queue" data-testid="evaluation-queue">
             {queue ?? '-'}

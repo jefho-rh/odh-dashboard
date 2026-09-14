@@ -46,6 +46,17 @@ describe('EvalHub API Contract Tests', () => {
       });
     });
 
+    it('should return the documented Kueue Workload statuses response', async () => {
+      const result = await apiClient.get(
+        '/eval-hub/api/v1/kueue/workloads?namespace=default&evaluation_ids=evaluation-001',
+      );
+
+      expect(result).toMatchContract(apiSchema, {
+        ref: '#/paths/~1eval-hub~1api~1v1~1kueue~1workloads/get/responses/200/content/application~1json/schema',
+        status: 200,
+      });
+    });
+
     it('should return the documented compatible HardwareProfiles response', async () => {
       const result = await apiClient.get('/eval-hub/api/v1/hardwareprofiles?namespace=default');
 

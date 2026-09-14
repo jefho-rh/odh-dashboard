@@ -60,7 +60,7 @@ describe('HardwareProfileField', () => {
 
     expect(container.querySelector('.pf-v6-c-form__label-required')).toHaveTextContent('*');
     expect(
-      screen.getByText('Select a HardwareProfile to schedule this evaluation through Kueue.'),
+      screen.getByText('Select a hardware profile to schedule this evaluation through Kueue.'),
     ).toBeInTheDocument();
   });
 
@@ -170,7 +170,7 @@ describe('HardwareProfileField', () => {
     expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
     expect(
       screen.getByText(
-        /No compatible HardwareProfiles are configured for this project. An evaluation cannot start/,
+        /No compatible hardware profiles are configured for this project. An evaluation cannot start/,
       ),
     ).toBeInTheDocument();
   });

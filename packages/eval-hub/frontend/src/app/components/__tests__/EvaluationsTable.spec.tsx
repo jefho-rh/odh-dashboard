@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { EvaluationJob } from '~/app/types';
@@ -7,6 +7,7 @@ import { mockEvaluationJob } from '~/__tests__/unit/testUtils/mockEvaluationData
 import EvaluationsTable from '~/app/components/EvaluationsTable';
 
 const mockUseKueueAvailability = jest.fn();
+const mockUseKueueWorkloadStatuses = jest.fn();
 const mockOnRefresh = jest.fn();
 const mockOnShowStatus = jest.fn();
 const mockNavigate = jest.fn();
@@ -31,6 +32,10 @@ jest.mock('~/app/hooks/useKueueAvailability', () => ({
   useKueueAvailability: () => mockUseKueueAvailability(),
 }));
 
+jest.mock('~/app/hooks/useKueueWorkloadStatuses', () => ({
+  useKueueWorkloadStatuses: () => mockUseKueueWorkloadStatuses(),
+}));
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
@@ -40,6 +45,12 @@ beforeEach(() => {
   mockUseKueueAvailability.mockReturnValue({
     availability: undefined,
     loaded: true,
+    error: undefined,
+  });
+  mockUseKueueWorkloadStatuses.mockReturnValue({
+    statusesByEvaluationId: new Map(),
+    loaded: true,
+    isLoading: false,
     error: undefined,
   });
 });
@@ -408,6 +419,66 @@ describe('EvaluationsTable', () => {
       expect(table).toHaveTextContent('Evaluated');
       expect(table).toHaveTextContent('Date');
       expect(table).toHaveTextContent('Result');
+    });
+
+    it('shows the Kueue status for Kueue-backed evaluations', () => {
+      mockUseKueueAvailability.mockReturnValue({
+        availability: { enabled: true },
+        loaded: true,
+        error: undefined,
+      });
+      mockUseKueueWorkloadStatuses.mockReturnValue({
+        statusesByEvaluationId: new Map([
+          [
+            'job-2',
+            {
+              // eslint-disable-next-line camelcase -- API payload uses OpenAPI field names.
+              evaluation_id: 'job-2',
+              // eslint-disable-next-line camelcase -- API payload uses OpenAPI field names.
+              queue_name: 'default',
+              state: 'queued',
+              message: 'Waiting for quota',
+            },
+          ],
+        ]),
+        loaded: true,
+        isLoading: false,
+        error: undefined,
+      });
+
+      const evaluations = mockJobs.map((job) =>
+        job.resource.id === 'job-2'
+          ? { ...job, status: { ...job.status, state: 'pending' as const } }
+          : job,
+      );
+      renderTable({ evaluations, loaded: true });
+
+      expect(screen.getByText('Kueue status')).toBeInTheDocument();
+      expect(screen.getByTestId('kueue-workload-status-queued')).toBeInTheDocument();
+      const betaRow = screen.getByText('Beta Evaluation').closest('tr');
+      expect(betaRow).not.toBeNull();
+      expect(within(betaRow!).getByTestId('evaluation-status-button')).toHaveTextContent('Pending');
+    });
+
+    it('keeps the table usable when the Kueue Workload request fails', () => {
+      const error = new Error('forbidden');
+      mockUseKueueAvailability.mockReturnValue({
+        availability: { enabled: true },
+        loaded: true,
+        error: undefined,
+      });
+      mockUseKueueWorkloadStatuses.mockReturnValue({
+        statusesByEvaluationId: new Map(),
+        loaded: true,
+        isLoading: false,
+        error,
+      });
+
+      renderTable({ evaluations: mockJobs, loaded: true });
+
+      expect(screen.getByTestId('kueue-workload-status-warning')).toBeInTheDocument();
+      expect(screen.getAllByTestId('evaluation-kueue-status')[0]).toHaveTextContent('Unavailable');
+      expect(screen.getByTestId('evaluation-row-0')).toBeInTheDocument();
     });
   });
 });

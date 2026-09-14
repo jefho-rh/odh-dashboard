@@ -30,7 +30,7 @@ const NO_HARDWARE_PROFILE_VALUE = '__no_hardware_profile__';
 const hardwareProfileHelp = {
   ariaLabel: 'More info for hardware profile',
   content:
-    'A HardwareProfile defines the resources requested by the evaluation and the Kueue LocalQueue used to schedule it. Kueue may wait to start the evaluation until the requested capacity is available.',
+    'A hardware profile defines the resources requested by the evaluation and the Kueue LocalQueue used to schedule it. Kueue may wait to start the evaluation until the requested capacity is available.',
 };
 
 const formatResourceDetails = (
@@ -78,7 +78,7 @@ const getHardwareProfileFieldState = ({
       return {
         unavailable: true,
         placeholder: 'Hardware profiles unavailable',
-        helperText: `${error?.message ?? 'Unable to load HardwareProfiles.'} Resolve this error before starting an evaluation.`,
+        helperText: `${error?.message ?? 'Unable to load hardware profiles.'} Resolve this error before starting an evaluation.`,
         helperVariant: 'error',
       };
     case Boolean(hasNoQueues):
@@ -92,9 +92,9 @@ const getHardwareProfileFieldState = ({
     case hasNoProfiles:
       return {
         unavailable: true,
-        placeholder: 'No compatible HardwareProfiles available',
+        placeholder: 'No compatible hardware profiles available',
         helperText:
-          'No compatible HardwareProfiles are configured for this project. An evaluation cannot start until an administrator configures one.',
+          'No compatible hardware profiles are configured for this project. An evaluation cannot start until an administrator configures one.',
         helperVariant: 'warning',
       };
     default:
@@ -102,8 +102,8 @@ const getHardwareProfileFieldState = ({
         unavailable: false,
         placeholder: 'Select hardware profile',
         helperText: isRequired
-          ? 'Select a HardwareProfile to schedule this evaluation through Kueue.'
-          : 'Only queue-backed HardwareProfiles are shown.',
+          ? 'Select a hardware profile to schedule this evaluation through Kueue.'
+          : 'Only queue-backed hardware profiles are shown.',
       };
   }
 };
