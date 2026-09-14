@@ -449,12 +449,17 @@ export function useStartEvaluationRunForm({
   const hasExperiment =
     (experimentMode === 'existing' && !!selectedExperimentName?.trim()) ||
     (experimentMode === 'new' && newExperimentName.trim() !== '');
+  // A Kueue-managed namespace must schedule its evaluations through a
+  // HardwareProfile. This remains true while its LocalQueues or compatible
+  // profiles are unavailable, so an incomplete Kueue configuration cannot be
+  // bypassed by falling back to provider-default scheduling.
   const requiresHardwareProfile =
-    !hardwareProfilesError && kueueAvailability?.enabled === true && hardwareProfiles.length > 0;
+    kueueAvailability?.cluster_enabled === true && kueueAvailability.namespace_managed === true;
 
   const isValid = React.useMemo(() => {
     if (
       !hardwareProfilesLoaded ||
+      hardwareProfilesError ||
       evaluationName.trim() === '' ||
       !hasBenchmarks ||
       !hasExperiment ||
@@ -488,6 +493,7 @@ export function useStartEvaluationRunForm({
     sourceName,
     selectedInferenceServiceName,
     hardwareProfilesLoaded,
+    hardwareProfilesError,
     requiresHardwareProfile,
     hardwareProfile,
   ]);

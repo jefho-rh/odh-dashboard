@@ -1567,7 +1567,7 @@ components:
         queue:
           $ref: '#/components/schemas/HardwareQueueConfig'
           deprecated: true
-          description: Deprecated lowest-priority queue fallback. Use hardware_config.queue instead.
+          description: Deprecated legacy queue fallback. Use hardware_config.hardware_profile_name for profile mode or hardware_config.queue for direct mode.
 
     HardwareConfig:
       type: object

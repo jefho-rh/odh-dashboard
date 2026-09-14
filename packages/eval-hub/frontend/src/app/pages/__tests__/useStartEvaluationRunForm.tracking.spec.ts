@@ -24,6 +24,8 @@ let mockHardwareProfilesLoaded = true;
 let mockKueueAvailabilityLoaded = true;
 let mockHardwareProfiles: HardwareProfile[] = [];
 let mockKueueAvailability: KueueAvailability | undefined;
+let mockHardwareProfilesError: Error | undefined;
+let mockKueueAvailabilityError: Error | undefined;
 
 jest.mock('@odh-dashboard/internal/concepts/analyticsTracking/segmentIOUtils', () => ({
   fireFormTrackingEvent: jest.fn(),
@@ -57,7 +59,7 @@ jest.mock('~/app/hooks/useHardwareProfiles', () => ({
   useHardwareProfiles: () => ({
     profiles: mockHardwareProfiles,
     loaded: mockHardwareProfilesLoaded,
-    error: undefined,
+    error: mockHardwareProfilesError,
   }),
 }));
 
@@ -65,7 +67,7 @@ jest.mock('~/app/hooks/useKueueAvailability', () => ({
   useKueueAvailability: () => ({
     availability: mockKueueAvailability,
     loaded: mockKueueAvailabilityLoaded,
-    error: undefined,
+    error: mockKueueAvailabilityError,
   }),
 }));
 
@@ -128,6 +130,8 @@ describe('useStartEvaluationRunForm - Tracking Events', () => {
     mockKueueAvailabilityLoaded = true;
     mockHardwareProfiles = [];
     mockKueueAvailability = undefined;
+    mockHardwareProfilesError = undefined;
+    mockKueueAvailabilityError = undefined;
   });
 
   it('should remain invalid while hardware profile data is loading', () => {
@@ -137,7 +141,7 @@ describe('useStartEvaluationRunForm - Tracking Events', () => {
     expect(renderResult.result.current.isValid).toBe(false);
   });
 
-  it('requires a HardwareProfile only when Kueue has compatible profiles', async () => {
+  it('requires a HardwareProfile in a Kueue-managed namespace', async () => {
     mockHardwareProfiles = [mockCompatibleHardwareProfile];
     mockKueueAvailability = mockKueueEnabled;
     const renderResult = renderForm();
@@ -156,6 +160,34 @@ describe('useStartEvaluationRunForm - Tracking Events', () => {
     });
 
     await waitFor(() => expect(renderResult.result.current.isValid).toBe(true));
+  });
+
+  it('requires a HardwareProfile when a Kueue-managed namespace has no compatible profiles', async () => {
+    mockKueueAvailability = mockKueueEnabled;
+    const renderResult = renderForm();
+
+    act(() => {
+      renderResult.result.current.handleModelDropdownSelect('model-a', mockInferenceServices);
+      renderResult.result.current.setExperimentMode('new');
+      renderResult.result.current.setNewExperimentName('EvalHub');
+    });
+
+    await waitFor(() => expect(renderResult.result.current.requiresHardwareProfile).toBe(true));
+    expect(renderResult.result.current.isValid).toBe(false);
+  });
+
+  it('blocks submission when Kueue or HardwareProfiles cannot be loaded', async () => {
+    mockKueueAvailability = mockKueueEnabled;
+    mockHardwareProfilesError = new Error('Unable to load HardwareProfiles');
+    const renderResult = renderForm();
+
+    act(() => {
+      renderResult.result.current.handleModelDropdownSelect('model-a', mockInferenceServices);
+      renderResult.result.current.setExperimentMode('new');
+      renderResult.result.current.setNewExperimentName('EvalHub');
+    });
+
+    await waitFor(() => expect(renderResult.result.current.isValid).toBe(false));
   });
 
   describe('Evaluations Run Source Selected', () => {

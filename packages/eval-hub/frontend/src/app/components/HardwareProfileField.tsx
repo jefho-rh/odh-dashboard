@@ -78,7 +78,7 @@ const getHardwareProfileFieldState = ({
       return {
         unavailable: true,
         placeholder: 'Hardware profiles unavailable',
-        helperText: error?.message ?? 'Unable to load HardwareProfiles.',
+        helperText: `${error?.message ?? 'Unable to load HardwareProfiles.'} Resolve this error before starting an evaluation.`,
         helperVariant: 'error',
       };
     case Boolean(hasNoQueues):
@@ -86,7 +86,7 @@ const getHardwareProfileFieldState = ({
         unavailable: true,
         placeholder: 'No LocalQueues available',
         helperText:
-          'No LocalQueues are configured for this project. You can submit without a HardwareProfile.',
+          'No LocalQueues are configured for this project. An evaluation cannot start until an administrator configures one.',
         helperVariant: 'warning',
       };
     case hasNoProfiles:
@@ -94,7 +94,7 @@ const getHardwareProfileFieldState = ({
         unavailable: true,
         placeholder: 'No compatible HardwareProfiles available',
         helperText:
-          'No compatible HardwareProfiles are configured for this project. You can submit without selecting one.',
+          'No compatible HardwareProfiles are configured for this project. An evaluation cannot start until an administrator configures one.',
         helperVariant: 'warning',
       };
     default:

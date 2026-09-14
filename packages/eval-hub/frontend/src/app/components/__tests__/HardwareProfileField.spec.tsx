@@ -150,7 +150,11 @@ describe('HardwareProfileField', () => {
     );
 
     expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
-    expect(screen.getByText(/No LocalQueues are configured/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /No LocalQueues are configured for this project. An evaluation cannot start/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('explains when Kueue is available but no compatible profiles are configured', () => {
@@ -164,7 +168,11 @@ describe('HardwareProfileField', () => {
     );
 
     expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
-    expect(screen.getByText(/No compatible HardwareProfiles are configured/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /No compatible HardwareProfiles are configured for this project. An evaluation cannot start/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows an error when loading Kueue or HardwareProfiles fails', () => {
@@ -178,6 +186,10 @@ describe('HardwareProfileField', () => {
     );
 
     expect(screen.getByTestId('hardware-profile-toggle')).toBeDisabled();
-    expect(screen.getByText('Unable to load HardwareProfiles')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Unable to load HardwareProfiles Resolve this error before starting an evaluation.',
+      ),
+    ).toBeInTheDocument();
   });
 });

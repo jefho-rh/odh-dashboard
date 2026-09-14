@@ -504,6 +504,8 @@ describe('Start Evaluation Run - Kueue Hardware Profiles', () => {
     startEvaluationRunPage
       .findHardwareProfileHelperText()
       .should('contain.text', 'No LocalQueues are configured for this project');
+    fillExternalModelFields('my-model', 'https://api.example.com/v1');
+    startEvaluationRunPage.findSubmitButton().should('be.disabled');
   });
 
   it('should validate the selected HardwareProfile before submitting its profile-only payload', () => {
