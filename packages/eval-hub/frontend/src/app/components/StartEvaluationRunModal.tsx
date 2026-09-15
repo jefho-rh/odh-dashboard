@@ -37,6 +37,7 @@ import LabelHelpPopover from '~/app/components/LabelHelpPopover';
 import SourceAgentFields from '~/app/components/SourceAgentFields';
 import SourceModelFields from '~/app/components/SourceModelFields';
 import SourcePrerecordedFields from '~/app/components/SourcePrerecordedFields';
+import HardwareProfileField from '~/app/components/HardwareProfileField';
 import { useInferenceServices } from '~/app/hooks/useInferenceServices';
 import {
   DEFAULT_EXPERIMENT_NAME,
@@ -118,6 +119,7 @@ const StartEvaluationRunModal: React.FC<StartEvaluationRunModalProps> = ({
     benchmark,
     collection,
     isCollectionFlow,
+    allowDeferredCollection: isCollectionFlow && !collection && !!resolveCollection,
     experiments,
     experimentsLoaded,
     defaultEvaluationName,
@@ -556,17 +558,23 @@ const StartEvaluationRunModal: React.FC<StartEvaluationRunModalProps> = ({
                   ) : null}
                 </FormGroup>
 
-                {!isCollectionFlow ? (
-                  <BenchmarkThresholdField
-                    value={form.threshold}
-                    onChange={form.handleThresholdChange}
-                    label="Benchmark threshold"
-                    fieldId="benchmark-threshold"
-                    isDisabled={isCloning}
-                  />
-                ) : null}
+                <HardwareProfileField
+                  className="pf-v6-u-mt-lg"
+                  availability={form.kueueAvailability}
+                  profiles={form.hardwareProfiles}
+                  loaded={form.hardwareProfilesLoaded}
+                  error={form.hardwareProfilesError}
+                  selectedProfile={form.hardwareProfile}
+                  onSelect={(profile) => form.setHardwareProfile(profile?.name)}
+                  isRequired={form.requiresHardwareProfile}
+                  disabled={isCloning}
+                />
 
-                <Flex alignItems={{ default: 'alignItemsCenter' }} gap={{ default: 'gapSm' }}>
+                <Flex
+                  className="pf-v6-u-mt-lg"
+                  alignItems={{ default: 'alignItemsCenter' }}
+                  gap={{ default: 'gapSm' }}
+                >
                   <FlexItem>
                     <Checkbox
                       id="show-additional-args"
@@ -610,6 +618,16 @@ const StartEvaluationRunModal: React.FC<StartEvaluationRunModalProps> = ({
                       </HelperText>
                     </FormHelperText>
                   </FormGroup>
+                ) : null}
+
+                {!isCollectionFlow ? (
+                  <BenchmarkThresholdField
+                    value={form.threshold}
+                    onChange={form.handleThresholdChange}
+                    label="Benchmark threshold"
+                    fieldId="benchmark-threshold"
+                    isDisabled={isCloning}
+                  />
                 ) : null}
               </ExpandableSection>
             </fieldset>
