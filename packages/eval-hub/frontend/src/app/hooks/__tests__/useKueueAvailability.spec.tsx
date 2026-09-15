@@ -15,6 +15,7 @@ const mockGetKueueAvailability = jest.mocked(getKueueAvailability);
 
 const availability: KueueAvailability = {
   enabled: true,
+  scheduling_ready: true,
   cluster_enabled: true,
   namespace_managed: true,
   local_queues_available: true,

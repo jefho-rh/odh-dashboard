@@ -148,14 +148,14 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
 }) => {
   const navigate = useNavigate();
   const { availability: kueueAvailability } = useKueueAvailability(namespace);
-  const isKueueEnabled = kueueAvailability?.enabled === true;
-  const showKueueStatus = isKueueEnabled;
+  const isKueueSchedulingReady = kueueAvailability?.scheduling_ready === true;
+  const showKueueStatus = isKueueSchedulingReady;
   const hasQueueAssignments = React.useMemo(
     () => evaluations.some((job) => Boolean(getEvaluationQueue(job))),
     [evaluations],
   );
   const dateColumnIndex = hasQueueAssignments ? (showKueueStatus ? 6 : 5) : showKueueStatus ? 5 : 4;
-  const statusOptions = isKueueEnabled
+  const statusOptions = isKueueSchedulingReady
     ? STATUS_OPTIONS
     : STATUS_OPTIONS.filter((option) => option.value !== 'queued');
   // Pause polling when the browser tab is backgrounded to reduce server load
@@ -172,7 +172,7 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
   } = useKueueWorkloadStatuses(
     namespace,
     evaluationIDs,
-    isKueueEnabled,
+    isKueueSchedulingReady,
     isKueueWorkloadStatusPollingEnabled,
   );
   const [activeFilter, setActiveFilter] = React.useState<FilterOption>('name');
@@ -197,10 +197,10 @@ const EvaluationsTable: React.FC<EvaluationsTableProps> = ({
         ? previous
         : { ...previous, index: dateColumnIndex };
     });
-    if (!isKueueEnabled && selectedStatus === 'queued') {
+    if (!isKueueSchedulingReady && selectedStatus === 'queued') {
       setSelectedStatus('');
     }
-  }, [dateColumnIndex, isKueueEnabled, selectedStatus]);
+  }, [dateColumnIndex, isKueueSchedulingReady, selectedStatus]);
 
   const filteredEvaluations = React.useMemo(
     () =>

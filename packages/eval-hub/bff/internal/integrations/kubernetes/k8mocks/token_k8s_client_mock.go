@@ -73,6 +73,7 @@ func (m *TokenKubernetesClientMock) GetEvalHubCRStatus(_ context.Context, _ *k8s
 func (m *TokenKubernetesClientMock) GetKueueAvailability(_ context.Context, _ *k8s.RequestIdentity, _ string) (*models.KueueAvailability, error) {
 	return &models.KueueAvailability{
 		Enabled:              true,
+		SchedulingReady:      true,
 		ClusterEnabled:       true,
 		NamespaceManaged:     true,
 		LocalQueuesAvailable: true,

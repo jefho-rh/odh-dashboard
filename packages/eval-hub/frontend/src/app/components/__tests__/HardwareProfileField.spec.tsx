@@ -6,6 +6,7 @@ import type { HardwareProfile, KueueAvailability } from '~/app/types';
 
 const availability: KueueAvailability = {
   enabled: true,
+  scheduling_ready: true,
   cluster_enabled: true,
   namespace_managed: true,
   local_queues_available: true,
@@ -124,7 +125,12 @@ describe('HardwareProfileField', () => {
   it('stays hidden when Kueue is unavailable', () => {
     render(
       <HardwareProfileField
-        availability={{ ...availability, enabled: false, namespace_managed: false }}
+        availability={{
+          ...availability,
+          enabled: false,
+          scheduling_ready: false,
+          namespace_managed: false,
+        }}
         profiles={[]}
         loaded
         onSelect={jest.fn()}
@@ -139,7 +145,7 @@ describe('HardwareProfileField', () => {
       <HardwareProfileField
         availability={{
           ...availability,
-          enabled: false,
+          scheduling_ready: false,
           local_queues_available: false,
           local_queue_names: [],
         }}

@@ -122,11 +122,8 @@ const HardwareProfileField: React.FC<HardwareProfileFieldProps> = ({
   const [isOpen, setIsOpen] = React.useState(false);
   const selected = profiles.find((profile) => profile.name === selectedProfile);
   const formGroupClassName = `evalhub-form-group--with-description${className ? ` ${className}` : ''}`;
-  const hasNoQueues =
-    availability?.cluster_enabled &&
-    availability.namespace_managed &&
-    !availability.local_queues_available;
-  const hasNoProfiles = availability?.enabled === true && profiles.length === 0;
+  const hasNoQueues = availability?.enabled === true && !availability.scheduling_ready;
+  const hasNoProfiles = availability?.scheduling_ready === true && profiles.length === 0;
   const fieldState = getHardwareProfileFieldState({
     error,
     hasNoQueues,

@@ -185,6 +185,7 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 	if !clusterEnabled || !namespaceManaged {
 		return &models.KueueAvailability{
 			Enabled:              false,
+			SchedulingReady:      false,
 			ClusterEnabled:       clusterEnabled,
 			NamespaceManaged:     namespaceManaged,
 			LocalQueuesAvailable: false,
@@ -198,7 +199,8 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return &models.KueueAvailability{
-				Enabled:              false,
+				Enabled:              clusterEnabled && namespaceManaged,
+				SchedulingReady:      false,
 				ClusterEnabled:       clusterEnabled,
 				NamespaceManaged:     namespaceManaged,
 				LocalQueuesAvailable: false,
@@ -213,7 +215,8 @@ func getKueueAvailability(ctx context.Context, client dynamic.Interface, namespa
 	}
 
 	return &models.KueueAvailability{
-		Enabled:              clusterEnabled && namespaceManaged && len(queueNames) > 0,
+		Enabled:              clusterEnabled && namespaceManaged,
+		SchedulingReady:      clusterEnabled && namespaceManaged && len(queueNames) > 0,
 		ClusterEnabled:       clusterEnabled,
 		NamespaceManaged:     namespaceManaged,
 		LocalQueuesAvailable: len(queueNames) > 0,

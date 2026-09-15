@@ -27,6 +27,7 @@ func TestGetKueueAvailability(t *testing.T) {
 		localQueues          []*unstructured.Unstructured
 		localQueuesNotFound  bool
 		wantEnabled          bool
+		wantSchedulingReady  bool
 		wantClusterEnabled   bool
 		wantNamespaceManaged bool
 		wantQueueNames       []string
@@ -41,6 +42,7 @@ func TestGetKueueAvailability(t *testing.T) {
 				localQueue("gpu-default"),
 			},
 			wantEnabled:          true,
+			wantSchedulingReady:  true,
 			wantClusterEnabled:   true,
 			wantNamespaceManaged: true,
 			wantQueueNames:       []string{"gpu-default"},
@@ -55,6 +57,7 @@ func TestGetKueueAvailability(t *testing.T) {
 				localQueue("default"),
 			},
 			wantEnabled:          true,
+			wantSchedulingReady:  true,
 			wantClusterEnabled:   true,
 			wantNamespaceManaged: true,
 			wantQueueNames:       []string{"default"},
@@ -65,6 +68,7 @@ func TestGetKueueAvailability(t *testing.T) {
 				legacyKueueManagedLabel: "true",
 			},
 			externalKueue:        externalKueue(true),
+			wantEnabled:          true,
 			wantClusterEnabled:   true,
 			wantNamespaceManaged: true,
 			wantQueueNames:       []string{},
@@ -82,6 +86,7 @@ func TestGetKueueAvailability(t *testing.T) {
 				kueueManagedLabel: "true",
 			},
 			dataScienceCluster:   managedDataScienceCluster(),
+			wantEnabled:          true,
 			wantClusterEnabled:   true,
 			wantNamespaceManaged: true,
 			wantQueueNames:       []string{},
@@ -134,6 +139,9 @@ func TestGetKueueAvailability(t *testing.T) {
 			if availability.Enabled != tt.wantEnabled {
 				t.Errorf("Enabled = %t, want %t", availability.Enabled, tt.wantEnabled)
 			}
+			if availability.SchedulingReady != tt.wantSchedulingReady {
+				t.Errorf("SchedulingReady = %t, want %t", availability.SchedulingReady, tt.wantSchedulingReady)
+			}
 			if availability.ClusterEnabled != tt.wantClusterEnabled {
 				t.Errorf("ClusterEnabled = %t, want %t", availability.ClusterEnabled, tt.wantClusterEnabled)
 			}
@@ -161,7 +169,7 @@ func TestKueueAvailabilityCacheSharesInFlightLookupAndReturnsClones(t *testing.T
 		loads.Add(1)
 		close(started)
 		<-release
-		return &models.KueueAvailability{Enabled: true, LocalQueueNames: []string{"gpu-default"}}, nil
+		return &models.KueueAvailability{Enabled: true, SchedulingReady: true, LocalQueueNames: []string{"gpu-default"}}, nil
 	}
 
 	type result struct {

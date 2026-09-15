@@ -47,7 +47,7 @@ func listHardwareProfilesForAvailability(
 	namespace string,
 	availability *models.KueueAvailability,
 ) (*models.HardwareProfilesResponse, error) {
-	if !availability.Enabled {
+	if !availability.SchedulingReady {
 		warning := ""
 		if availability.ClusterEnabled && availability.NamespaceManaged {
 			warning = "No LocalQueues are configured for this namespace."

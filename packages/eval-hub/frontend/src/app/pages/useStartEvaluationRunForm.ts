@@ -453,8 +453,7 @@ export function useStartEvaluationRunForm({
   // HardwareProfile. This remains true while its LocalQueues or compatible
   // profiles are unavailable, so an incomplete Kueue configuration cannot be
   // bypassed by falling back to provider-default scheduling.
-  const requiresHardwareProfile =
-    kueueAvailability?.cluster_enabled === true && kueueAvailability.namespace_managed === true;
+  const requiresHardwareProfile = kueueAvailability?.enabled === true;
 
   const isValid = React.useMemo(() => {
     if (

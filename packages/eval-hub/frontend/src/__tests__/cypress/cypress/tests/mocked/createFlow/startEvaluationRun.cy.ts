@@ -473,6 +473,7 @@ describe('Start Evaluation Run - Submission Error', () => {
 describe('Start Evaluation Run - Kueue Hardware Profiles', () => {
   const compatibleAvailability = mockKueueAvailability({
     enabled: true,
+    scheduling_ready: true,
     cluster_enabled: true,
     namespace_managed: true,
     local_queues_available: true,
@@ -494,6 +495,7 @@ describe('Start Evaluation Run - Kueue Hardware Profiles', () => {
   it('should disable the HardwareProfile field and explain when no LocalQueues exist', () => {
     mockKueueHardwareProfiles({
       availability: mockKueueAvailability({
+        enabled: true,
         cluster_enabled: true,
         namespace_managed: true,
       }),

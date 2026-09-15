@@ -60,6 +60,7 @@ func TestKueueAvailabilityHandlerReturnsAvailability(t *testing.T) {
 	client := &kueueHardwareProfilesK8sClient{
 		availability: &models.KueueAvailability{
 			Enabled:              true,
+			SchedulingReady:      true,
 			ClusterEnabled:       true,
 			NamespaceManaged:     true,
 			LocalQueuesAvailable: true,

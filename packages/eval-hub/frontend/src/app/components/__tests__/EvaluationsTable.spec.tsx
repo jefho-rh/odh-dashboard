@@ -277,7 +277,10 @@ describe('EvaluationsTable', () => {
   describe('filtering', () => {
     it('should offer the Queued status filter when Kueue is enabled without queued jobs', () => {
       mockUseKueueAvailability.mockReturnValue({
-        availability: { enabled: true },
+        availability: {
+          // eslint-disable-next-line camelcase -- Kueue API field name.
+          scheduling_ready: true,
+        },
         loaded: true,
         error: undefined,
       });
@@ -423,7 +426,10 @@ describe('EvaluationsTable', () => {
 
     it('shows the Kueue status for Kueue-backed evaluations', () => {
       mockUseKueueAvailability.mockReturnValue({
-        availability: { enabled: true },
+        availability: {
+          // eslint-disable-next-line camelcase -- Kueue API field name.
+          scheduling_ready: true,
+        },
         loaded: true,
         error: undefined,
       });
@@ -463,7 +469,10 @@ describe('EvaluationsTable', () => {
     it('keeps the table usable when the Kueue Workload request fails', () => {
       const error = new Error('forbidden');
       mockUseKueueAvailability.mockReturnValue({
-        availability: { enabled: true },
+        availability: {
+          // eslint-disable-next-line camelcase -- Kueue API field name.
+          scheduling_ready: true,
+        },
         loaded: true,
         error: undefined,
       });

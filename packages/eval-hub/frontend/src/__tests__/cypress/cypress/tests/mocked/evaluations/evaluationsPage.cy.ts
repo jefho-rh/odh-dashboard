@@ -274,6 +274,7 @@ describe('Evaluations Page - Table', () => {
       jobs: [completedJob, runningJob, failedJob],
       kueueAvailability: mockKueueAvailability({
         enabled: true,
+        scheduling_ready: true,
         cluster_enabled: true,
         namespace_managed: true,
         local_queues_available: true,

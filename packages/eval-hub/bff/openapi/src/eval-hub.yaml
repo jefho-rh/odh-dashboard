@@ -1676,6 +1676,7 @@ components:
       type: object
       required:
         - enabled
+        - scheduling_ready
         - cluster_enabled
         - namespace_managed
         - local_queues_available
@@ -1683,6 +1684,10 @@ components:
       properties:
         enabled:
           type: boolean
+          description: Kueue is installed and manages this namespace.
+        scheduling_ready:
+          type: boolean
+          description: An available LocalQueue is configured and queue-backed evaluations can start.
         cluster_enabled:
           type: boolean
         namespace_managed:

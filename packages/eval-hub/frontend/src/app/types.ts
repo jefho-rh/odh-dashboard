@@ -48,6 +48,7 @@ export type EvalHubHealthResponse = {
 
 export type KueueAvailability = {
   enabled: boolean;
+  scheduling_ready: boolean;
   cluster_enabled: boolean;
   namespace_managed: boolean;
   local_queues_available: boolean;

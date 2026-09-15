@@ -1,9 +1,13 @@
 package models
 
-// KueueAvailability describes whether queue-backed scheduling is available
-// for a namespace.
+// KueueAvailability describes the Kueue integration state for a namespace.
 type KueueAvailability struct {
-	Enabled              bool     `json:"enabled"`
+	// Enabled means Kueue is installed and manages the namespace. It controls
+	// whether the UI exposes Kueue configuration.
+	Enabled bool `json:"enabled"`
+	// SchedulingReady means the namespace has an available LocalQueue and can
+	// start a queue-backed evaluation.
+	SchedulingReady      bool     `json:"scheduling_ready"`
 	ClusterEnabled       bool     `json:"cluster_enabled"`
 	NamespaceManaged     bool     `json:"namespace_managed"`
 	LocalQueuesAvailable bool     `json:"local_queues_available"`
