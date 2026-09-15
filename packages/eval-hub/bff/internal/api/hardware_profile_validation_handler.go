@@ -54,7 +54,8 @@ func (app *App) ValidateHardwareProfileHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	profiles, err := k8sClient.ListHardwareProfiles(ctx, identity, namespace)
+	hardwareProfilesNamespace := app.hardwareProfilesNamespace()
+	profiles, err := k8sClient.ListHardwareProfiles(ctx, identity, namespace, hardwareProfilesNamespace)
 	if err != nil {
 		app.serverErrorResponse(w, r, fmt.Errorf("failed to validate HardwareProfile: %w", err))
 		return
@@ -71,6 +72,7 @@ func (app *App) ValidateHardwareProfileHandler(w http.ResponseWriter, r *http.Re
 			ctx,
 			identity,
 			namespace,
+			hardwareProfilesNamespace,
 			input.HardwareProfile,
 		)
 		if err != nil {
@@ -87,9 +89,9 @@ func (app *App) ValidateHardwareProfileHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 		app.badRequestResponse(w, r, fmt.Errorf(
-			"HardwareProfile %q is not available in namespace %q",
+			"HardwareProfile %q is not available in platform namespace %q",
 			input.HardwareProfile,
-			namespace,
+			hardwareProfilesNamespace,
 		))
 		return
 	}

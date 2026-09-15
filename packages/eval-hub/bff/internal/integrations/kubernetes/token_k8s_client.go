@@ -276,24 +276,24 @@ func (kc *TokenKubernetesClient) GetKueueWorkloadStatuses(ctx context.Context, _
 	return getKueueWorkloadStatuses(ctx, dynamicClient, namespace, evaluationIDs)
 }
 
-func (kc *TokenKubernetesClient) ListHardwareProfiles(ctx context.Context, _ *RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error) {
+func (kc *TokenKubernetesClient) ListHardwareProfiles(ctx context.Context, _ *RequestIdentity, evaluationNamespace, hardwareProfilesNamespace string) (*models.HardwareProfilesResponse, error) {
 	dynamicClient, err := dynamicFromConfig(kc.restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic client for HardwareProfile lookup: %w", err)
 	}
-	availability, err := getCachedKueueAvailability(ctx, dynamicClient, namespace, kueueAvailabilityCacheKey(namespace, kc.Token.Raw()))
+	availability, err := getCachedKueueAvailability(ctx, dynamicClient, evaluationNamespace, kueueAvailabilityCacheKey(evaluationNamespace, kc.Token.Raw()))
 	if err != nil {
 		return nil, err
 	}
-	return listHardwareProfilesForAvailability(ctx, dynamicClient, namespace, availability)
+	return listHardwareProfilesForAvailability(ctx, dynamicClient, hardwareProfilesNamespace, availability)
 }
 
-func (kc *TokenKubernetesClient) GetMissingHardwareProfileLocalQueueName(ctx context.Context, _ *RequestIdentity, namespace, profileName string) (string, bool, error) {
+func (kc *TokenKubernetesClient) GetMissingHardwareProfileLocalQueueName(ctx context.Context, _ *RequestIdentity, evaluationNamespace, hardwareProfilesNamespace, profileName string) (string, bool, error) {
 	dynamicClient, err := dynamicFromConfig(kc.restConfig)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create dynamic client for HardwareProfile lookup: %w", err)
 	}
-	return getMissingHardwareProfileLocalQueueName(ctx, dynamicClient, namespace, profileName)
+	return getMissingHardwareProfileLocalQueueName(ctx, dynamicClient, evaluationNamespace, hardwareProfilesNamespace, profileName)
 }
 
 // CanListEvalHubInstances performs a SelfSubjectAccessReview to check whether the user's

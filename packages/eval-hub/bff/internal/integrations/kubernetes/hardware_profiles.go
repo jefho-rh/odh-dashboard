@@ -29,22 +29,23 @@ var hardwareProfileGVR = schema.GroupVersionResource{
 func listHardwareProfiles(
 	ctx context.Context,
 	client dynamic.Interface,
-	namespace string,
+	evaluationNamespace string,
+	hardwareProfilesNamespace string,
 ) (*models.HardwareProfilesResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	availability, err := getKueueAvailability(ctx, client, namespace)
+	availability, err := getKueueAvailability(ctx, client, evaluationNamespace)
 	if err != nil {
 		return nil, err
 	}
-	return listHardwareProfilesForAvailability(ctx, client, namespace, availability)
+	return listHardwareProfilesForAvailability(ctx, client, hardwareProfilesNamespace, availability)
 }
 
 func listHardwareProfilesForAvailability(
 	ctx context.Context,
 	client dynamic.Interface,
-	namespace string,
+	hardwareProfilesNamespace string,
 	availability *models.KueueAvailability,
 ) (*models.HardwareProfilesResponse, error) {
 	if !availability.SchedulingReady {
@@ -63,9 +64,9 @@ func listHardwareProfilesForAvailability(
 		queues[name] = struct{}{}
 	}
 
-	profiles, err := client.Resource(hardwareProfileGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	profiles, err := client.Resource(hardwareProfileGVR).Namespace(hardwareProfilesNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list HardwareProfiles in namespace %q: %w", namespace, err)
+		return nil, fmt.Errorf("failed to list HardwareProfiles in namespace %q: %w", hardwareProfilesNamespace, err)
 	}
 
 	items := make([]models.HardwareProfile, 0, len(profiles.Items))
@@ -125,23 +126,25 @@ func listHardwareProfilesForAvailability(
 }
 
 // getMissingHardwareProfileLocalQueueName determines whether a selected Queue
-// HardwareProfile still references an existing LocalQueue. It is intentionally
+// HardwareProfile still references an existing LocalQueue. HardwareProfiles are
+// read from the platform namespace, while LocalQueues are read from the
+// evaluation namespace. It is intentionally
 // separate from listHardwareProfiles: callers only need this extra lookup after
 // a previously selected profile is no longer in the compatible list.
 func getMissingHardwareProfileLocalQueueName(
 	ctx context.Context,
 	client dynamic.Interface,
-	namespace, profileName string,
+	evaluationNamespace, hardwareProfilesNamespace, profileName string,
 ) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	profile, err := client.Resource(hardwareProfileGVR).Namespace(namespace).Get(ctx, profileName, metav1.GetOptions{})
+	profile, err := client.Resource(hardwareProfileGVR).Namespace(hardwareProfilesNamespace).Get(ctx, profileName, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return "", false, nil
 		}
-		return "", false, fmt.Errorf("failed to read HardwareProfile %q in namespace %q: %w", profileName, namespace, err)
+		return "", false, fmt.Errorf("failed to read HardwareProfile %q in namespace %q: %w", profileName, hardwareProfilesNamespace, err)
 	}
 
 	scheduling, _, _ := unstructured.NestedMap(profile.Object, "spec", "scheduling")
@@ -152,12 +155,12 @@ func getMissingHardwareProfileLocalQueueName(
 		return "", false, nil
 	}
 
-	queues, err := client.Resource(localQueueGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	queues, err := client.Resource(localQueueGVR).Namespace(evaluationNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return localQueueName, true, nil
 		}
-		return "", false, fmt.Errorf("failed to list LocalQueues in namespace %q: %w", namespace, err)
+		return "", false, fmt.Errorf("failed to list LocalQueues in namespace %q: %w", evaluationNamespace, err)
 	}
 	for _, queue := range queues.Items {
 		if queue.GetName() == localQueueName {

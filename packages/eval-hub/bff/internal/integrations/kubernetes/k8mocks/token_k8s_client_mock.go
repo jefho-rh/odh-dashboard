@@ -85,7 +85,7 @@ func (m *TokenKubernetesClientMock) GetKueueWorkloadStatuses(_ context.Context, 
 	return &models.KueueWorkloadStatusesResponse{Items: []models.KueueWorkloadStatus{}}, nil
 }
 
-func (m *TokenKubernetesClientMock) ListHardwareProfiles(_ context.Context, _ *k8s.RequestIdentity, _ string) (*models.HardwareProfilesResponse, error) {
+func (m *TokenKubernetesClientMock) ListHardwareProfiles(_ context.Context, _ *k8s.RequestIdentity, _, _ string) (*models.HardwareProfilesResponse, error) {
 	return &models.HardwareProfilesResponse{
 		Items: []models.HardwareProfile{
 			{

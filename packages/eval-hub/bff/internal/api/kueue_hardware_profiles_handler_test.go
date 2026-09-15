@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/opendatahub-io/eval-hub/bff/internal/config"
 	"github.com/opendatahub-io/eval-hub/bff/internal/integrations/evalhub"
 	kubernetes "github.com/opendatahub-io/eval-hub/bff/internal/integrations/kubernetes"
 	"github.com/opendatahub-io/eval-hub/bff/internal/models"
@@ -13,16 +14,18 @@ import (
 
 type kueueHardwareProfilesK8sClient struct {
 	testK8sClient
-	availability            *models.KueueAvailability
-	profiles                *models.HardwareProfilesResponse
-	workloadStatuses        *models.KueueWorkloadStatusesResponse
-	missingQueue            string
-	queueMissing            bool
-	profileNamespace        string
-	missingProfileNamespace string
-	workloadNamespace       string
-	workloadEvaluationIDs   []string
-	err                     error
+	availability               *models.KueueAvailability
+	profiles                   *models.HardwareProfilesResponse
+	workloadStatuses           *models.KueueWorkloadStatusesResponse
+	missingQueue               string
+	queueMissing               bool
+	evaluationNamespace        string
+	profileNamespace           string
+	missingEvaluationNamespace string
+	missingProfileNamespace    string
+	workloadNamespace          string
+	workloadEvaluationIDs      []string
+	err                        error
 }
 
 func (c *kueueHardwareProfilesK8sClient) GetKueueAvailability(_ context.Context, _ *kubernetes.RequestIdentity, _ string) (*models.KueueAvailability, error) {
@@ -41,17 +44,31 @@ func (c *kueueHardwareProfilesK8sClient) GetKueueWorkloadStatuses(_ context.Cont
 	return c.workloadStatuses, nil
 }
 
-func (c *kueueHardwareProfilesK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error) {
-	c.profileNamespace = namespace
+func (c *kueueHardwareProfilesK8sClient) ListHardwareProfiles(_ context.Context, _ *kubernetes.RequestIdentity, evaluationNamespace, hardwareProfilesNamespace string) (*models.HardwareProfilesResponse, error) {
+	c.evaluationNamespace = evaluationNamespace
+	c.profileNamespace = hardwareProfilesNamespace
 	if c.err != nil {
 		return nil, c.err
 	}
 	return c.profiles, nil
 }
 
-func (c *kueueHardwareProfilesK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, namespace, _ string) (string, bool, error) {
-	c.missingProfileNamespace = namespace
+func (c *kueueHardwareProfilesK8sClient) GetMissingHardwareProfileLocalQueueName(_ context.Context, _ *kubernetes.RequestIdentity, evaluationNamespace, hardwareProfilesNamespace, _ string) (string, bool, error) {
+	c.missingEvaluationNamespace = evaluationNamespace
+	c.missingProfileNamespace = hardwareProfilesNamespace
 	return c.missingQueue, c.queueMissing, c.err
+}
+
+// TestHardwareProfilesNamespaceUsesConfiguredOverride verifies that a local BFF
+// can query the exact platform namespace configured on the EvalHub service.
+func TestHardwareProfilesNamespaceUsesConfiguredOverride(t *testing.T) {
+	app := &App{
+		config:             config.EnvConfig{HardwareProfilesNamespace: "evalhub-platform"},
+		dashboardNamespace: "dashboard-platform",
+	}
+	if namespace := app.hardwareProfilesNamespace(); namespace != "evalhub-platform" {
+		t.Fatalf("hardwareProfilesNamespace() = %q, want evalhub-platform", namespace)
+	}
 }
 
 // TestKueueAvailabilityHandlerReturnsAvailability verifies that the availability endpoint returns
@@ -142,7 +159,8 @@ func TestKueueWorkloadStatusesHandlerRejectsMissingEvaluationIDs(t *testing.T) {
 }
 
 // TestHardwareProfilesHandlerReturnsProfiles verifies that the profile endpoint returns
-// queue-compatible HardwareProfiles from the namespace where the evaluation will run.
+// queue-compatible HardwareProfiles from the platform namespace and checks their
+// LocalQueues in the namespace where the evaluation will run.
 func TestHardwareProfilesHandlerReturnsProfiles(t *testing.T) {
 	client := &kueueHardwareProfilesK8sClient{profiles: &models.HardwareProfilesResponse{
 		Items: []models.HardwareProfile{{
@@ -170,8 +188,8 @@ func TestHardwareProfilesHandlerReturnsProfiles(t *testing.T) {
 	if len(result.Data.Items) != 1 || result.Data.Items[0].LocalQueueName != "gpu-default" {
 		t.Fatalf("unexpected HardwareProfiles response: %+v", result.Data)
 	}
-	if client.profileNamespace != "test-namespace" {
-		t.Fatalf("HardwareProfile namespace = %q, want test-namespace", client.profileNamespace)
+	if client.evaluationNamespace != "test-namespace" || client.profileNamespace != "test-dashboard-ns" {
+		t.Fatalf("HardwareProfile namespaces = (%q, %q), want (test-namespace, test-dashboard-ns)", client.evaluationNamespace, client.profileNamespace)
 	}
 }
 
@@ -200,14 +218,14 @@ func TestValidateHardwareProfileHandlerReportsDeletedLocalQueue(t *testing.T) {
 	if result.Error.Message != "LocalQueue \"gpu-default\" configured by HardwareProfile \"gpu\" is no longer available in namespace \"test-namespace\"" {
 		t.Fatalf("unexpected error response: %+v", result)
 	}
-	if client.profileNamespace != "test-namespace" || client.missingProfileNamespace != "test-namespace" {
-		t.Fatalf("HardwareProfile namespaces = (%q, %q), want (test-namespace, test-namespace)", client.profileNamespace, client.missingProfileNamespace)
+	if client.evaluationNamespace != "test-namespace" || client.profileNamespace != "test-dashboard-ns" || client.missingEvaluationNamespace != "test-namespace" || client.missingProfileNamespace != "test-dashboard-ns" {
+		t.Fatalf("HardwareProfile namespaces = (%q, %q, %q, %q), want (test-namespace, test-dashboard-ns, test-namespace, test-dashboard-ns)", client.evaluationNamespace, client.profileNamespace, client.missingEvaluationNamespace, client.missingProfileNamespace)
 	}
 }
 
-// TestValidateHardwareProfileHandlerReportsProfileMissingFromEvaluationNamespace verifies that
-// submission is rejected if the chosen HardwareProfile no longer exists in the evaluation namespace.
-func TestValidateHardwareProfileHandlerReportsProfileMissingFromEvaluationNamespace(t *testing.T) {
+// TestValidateHardwareProfileHandlerReportsProfileMissingFromPlatformNamespace verifies that
+// submission is rejected if the chosen HardwareProfile no longer exists in the platform namespace.
+func TestValidateHardwareProfileHandlerReportsProfileMissingFromPlatformNamespace(t *testing.T) {
 	client := &kueueHardwareProfilesK8sClient{profiles: &models.HardwareProfilesResponse{}}
 	result, response, err := setupApiTestWithEvalHub[HTTPError](
 		http.MethodPost,
@@ -223,11 +241,11 @@ func TestValidateHardwareProfileHandlerReportsProfileMissingFromEvaluationNamesp
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadRequest)
 	}
-	if result.Error.Message != "HardwareProfile \"gpu\" is not available in namespace \"test-namespace\"" {
+	if result.Error.Message != "HardwareProfile \"gpu\" is not available in platform namespace \"test-dashboard-ns\"" {
 		t.Fatalf("unexpected error response: %+v", result)
 	}
-	if client.profileNamespace != "test-namespace" || client.missingProfileNamespace != "test-namespace" {
-		t.Fatalf("HardwareProfile namespaces = (%q, %q), want (test-namespace, test-namespace)", client.profileNamespace, client.missingProfileNamespace)
+	if client.evaluationNamespace != "test-namespace" || client.profileNamespace != "test-dashboard-ns" || client.missingEvaluationNamespace != "test-namespace" || client.missingProfileNamespace != "test-dashboard-ns" {
+		t.Fatalf("HardwareProfile namespaces = (%q, %q, %q, %q), want (test-namespace, test-dashboard-ns, test-namespace, test-dashboard-ns)", client.evaluationNamespace, client.profileNamespace, client.missingEvaluationNamespace, client.missingProfileNamespace)
 	}
 }
 

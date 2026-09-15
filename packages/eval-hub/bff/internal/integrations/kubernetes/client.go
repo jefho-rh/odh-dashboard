@@ -38,7 +38,8 @@ type KubernetesClientInterface interface {
 	// Kueue and HardwareProfile discovery
 	GetKueueAvailability(ctx context.Context, identity *RequestIdentity, namespace string) (*models.KueueAvailability, error)
 	GetKueueWorkloadStatuses(ctx context.Context, identity *RequestIdentity, namespace string, evaluationIDs []string) (*models.KueueWorkloadStatusesResponse, error)
-	// HardwareProfiles and their Kueue LocalQueues are evaluated in the namespace where the evaluation runs.
-	ListHardwareProfiles(ctx context.Context, identity *RequestIdentity, namespace string) (*models.HardwareProfilesResponse, error)
-	GetMissingHardwareProfileLocalQueueName(ctx context.Context, identity *RequestIdentity, namespace, profileName string) (string, bool, error)
+	// HardwareProfiles are defined in the platform namespace; the LocalQueue named by a
+	// profile must exist in the namespace where the evaluation runs.
+	ListHardwareProfiles(ctx context.Context, identity *RequestIdentity, evaluationNamespace, hardwareProfilesNamespace string) (*models.HardwareProfilesResponse, error)
+	GetMissingHardwareProfileLocalQueueName(ctx context.Context, identity *RequestIdentity, evaluationNamespace, hardwareProfilesNamespace, profileName string) (string, bool, error)
 }

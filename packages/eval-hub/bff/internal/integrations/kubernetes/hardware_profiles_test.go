@@ -21,7 +21,7 @@ func TestListHardwareProfilesReturnsOnlyQueueCompatibleProfiles(t *testing.T) {
 		hardwareProfile("spec-disabled", "Spec Disabled", false, "Queue", "gpu-default", nil),
 	)
 
-	response, err := listHardwareProfiles(context.Background(), client, testNamespace)
+	response, err := listHardwareProfiles(context.Background(), client, testNamespace, testNamespace)
 	if err != nil {
 		t.Fatalf("listHardwareProfiles() error = %v", err)
 	}
@@ -40,7 +40,7 @@ func TestListHardwareProfilesWarnsWhenNoLocalQueuesExist(t *testing.T) {
 		managedDataScienceCluster(),
 	)
 
-	response, err := listHardwareProfiles(context.Background(), client, testNamespace)
+	response, err := listHardwareProfiles(context.Background(), client, testNamespace, testNamespace)
 	if err != nil {
 		t.Fatalf("listHardwareProfiles() error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestListHardwareProfilesWarnsWhenNoLocalQueuesExist(t *testing.T) {
 	}
 }
 
-func TestListHardwareProfilesUsesEvaluationNamespaceForProfilesAndQueues(t *testing.T) {
+func TestListHardwareProfilesUsesPlatformNamespaceForProfilesAndEvaluationNamespaceForQueues(t *testing.T) {
 	platformNamespace := "redhat-ods-applications"
 	client := newKueueFakeClient(
 		namespaceObject(map[string]interface{}{kueueManagedLabel: "true"}),
@@ -62,28 +62,30 @@ func TestListHardwareProfilesUsesEvaluationNamespaceForProfilesAndQueues(t *test
 		hardwareProfileInNamespace("platform-cpu", "Platform CPU", true, "Queue", "default", nil, platformNamespace),
 	)
 
-	response, err := listHardwareProfiles(context.Background(), client, testNamespace)
+	response, err := listHardwareProfiles(context.Background(), client, testNamespace, platformNamespace)
 	if err != nil {
 		t.Fatalf("listHardwareProfiles() error = %v", err)
 	}
-	if len(response.Items) != 1 || response.Items[0].Name != "evalhub-cpu" {
-		t.Fatalf("listHardwareProfiles() returned %+v, want evalhub-cpu", response.Items)
+	if len(response.Items) != 1 || response.Items[0].Name != "platform-cpu" {
+		t.Fatalf("listHardwareProfiles() returned %+v, want platform-cpu", response.Items)
 	}
 }
 
 func TestGetMissingHardwareProfileLocalQueueName(t *testing.T) {
+	platformNamespace := "redhat-ods-applications"
 	client := newKueueFakeClient(
 		namespaceObject(map[string]interface{}{kueueManagedLabel: "true"}),
 		managedDataScienceCluster(),
 		localQueue("gpu-default"),
-		hardwareProfile("available", "Available", true, "Queue", "gpu-default", nil),
-		hardwareProfile("stale", "Stale", true, "Queue", "removed-queue", nil),
+		hardwareProfileInNamespace("available", "Available", true, "Queue", "gpu-default", nil, platformNamespace),
+		hardwareProfileInNamespace("stale", "Stale", true, "Queue", "removed-queue", nil, platformNamespace),
 	)
 
 	queue, missing, err := getMissingHardwareProfileLocalQueueName(
 		context.Background(),
 		client,
 		testNamespace,
+		platformNamespace,
 		"stale",
 	)
 	if err != nil {
@@ -97,6 +99,7 @@ func TestGetMissingHardwareProfileLocalQueueName(t *testing.T) {
 		context.Background(),
 		client,
 		testNamespace,
+		platformNamespace,
 		"available",
 	)
 	if err != nil {

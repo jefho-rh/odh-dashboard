@@ -56,6 +56,44 @@ func TestEvalHubClient_HealthCheck_ServerError(t *testing.T) {
 	assert.Equal(t, ErrCodeInternalError, ehErr.Code)
 }
 
+func TestProviderK8sRuntimeUnmarshalJSONSupportsEvalHubResourceFields(t *testing.T) {
+	var response ProvidersResponse
+	err := json.Unmarshal([]byte(`{
+		"items": [{
+			"name": "lm-evaluation-harness",
+			"runtime": {
+				"k8s": {
+					"Image": "registry.example.com/evaluator:latest",
+					"CPURequest": "100m",
+					"MemoryRequest": "128Mi",
+					"CPULimit": "500m",
+					"MemoryLimit": "4Gi"
+				}
+			}
+		}]
+	}`), &response)
+	require.NoError(t, err)
+	require.Len(t, response.Items, 1)
+	require.NotNil(t, response.Items[0].Runtime)
+	require.NotNil(t, response.Items[0].Runtime.K8s)
+
+	runtime := response.Items[0].Runtime.K8s
+	assert.Equal(t, "100m", runtime.CPURequest)
+	assert.Equal(t, "128Mi", runtime.MemoryRequest)
+	assert.Equal(t, "500m", runtime.CPULimit)
+	assert.Equal(t, "4Gi", runtime.MemoryLimit)
+
+	payload, err := json.Marshal(runtime)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"image": "registry.example.com/evaluator:latest",
+		"cpu_request": "100m",
+		"memory_request": "128Mi",
+		"cpu_limit": "500m",
+		"memory_limit": "4Gi"
+	}`, string(payload))
+}
+
 func TestEvalHubClient_ListEvaluationJobs(t *testing.T) {
 	resp := EvaluationJobsResponse{
 		TotalCount: 2,

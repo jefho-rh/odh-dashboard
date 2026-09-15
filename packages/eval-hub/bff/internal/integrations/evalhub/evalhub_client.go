@@ -270,6 +270,44 @@ type ProviderK8sRuntime struct {
 	Env           []ProviderEnvVar `json:"env,omitempty"`
 }
 
+// UnmarshalJSON accepts the snake_case fields exposed by the BFF API and the
+// PascalCase resource fields returned by the EvalHub service. EvalHub's Go
+// runtime type has YAML/mapstructure tags for these fields but no JSON tags,
+// so encoding/json serializes CPURequest, MemoryRequest, CPULimit, and
+// MemoryLimit with their Go field names.
+func (r *ProviderK8sRuntime) UnmarshalJSON(data []byte) error {
+	type providerK8sRuntimeAlias ProviderK8sRuntime
+	var runtime providerK8sRuntimeAlias
+	if err := json.Unmarshal(data, &runtime); err != nil {
+		return err
+	}
+	*r = ProviderK8sRuntime(runtime)
+
+	var evalHubRuntime struct {
+		CPURequest    string `json:"CPURequest"`
+		MemoryRequest string `json:"MemoryRequest"`
+		CPULimit      string `json:"CPULimit"`
+		MemoryLimit   string `json:"MemoryLimit"`
+	}
+	if err := json.Unmarshal(data, &evalHubRuntime); err != nil {
+		return err
+	}
+	if r.CPURequest == "" {
+		r.CPURequest = evalHubRuntime.CPURequest
+	}
+	if r.MemoryRequest == "" {
+		r.MemoryRequest = evalHubRuntime.MemoryRequest
+	}
+	if r.CPULimit == "" {
+		r.CPULimit = evalHubRuntime.CPULimit
+	}
+	if r.MemoryLimit == "" {
+		r.MemoryLimit = evalHubRuntime.MemoryLimit
+	}
+
+	return nil
+}
+
 type ProviderGPU struct {
 	Resource string `json:"resource,omitempty"`
 	Count    int64  `json:"count,omitempty"`
